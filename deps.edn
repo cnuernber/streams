@@ -1,4 +1,7 @@
 {:paths ["src"]
- :deps {com.cnuernber/ham-fisted {:mvn/version "1.000-beta-90"}
+ :deps {com.cnuernber/ham-fisted {:mvn/version "1.000-beta-91"}
         kixi/stats {:mvn/version "0.5.5"}
-        generateme/fastmath {:mvn/version "2.1.8"}}}
+        generateme/fastmath {:mvn/version "2.1.8"}}
+ :aliases
+ {:dev
+  {:extra-deps {criterium/criterium {:mvn/version "0.4.5"}}}}}

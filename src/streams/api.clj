@@ -1,29 +1,53 @@
-(ns streams.api
-  (:require [ham-fisted.api :as hamf])
-  (:import [ham_fisted Transformables ITypedReduce Casts]
-           [java.util.function DoubleSupplier DoublePredicate]
+(ns streams.untyped
+  (:require [ham-fisted.api :as hamf]
+            [streams.protocols :as streams-p])
+
+  (:import [ham_fisted Transformables ITypedReduce Casts IFnDef IFnDef$O]
+           [streams.protocols Limited]
+           [java.util.function Supplier Predicate]
            [java.util Random]
-           [clojure.lang IDeref IFn$DD IFn$DDD IFn$DDDD IFn$D ISeq])
-  (:refer-clojure :exclude [filter map + - * / take]))
+           [clojure.lang IDeref IFn ISeq])
+  (:refer-clojure :exclude [take filter map + - / *]))
+
 
 (set! *warn-on-reflection* true)
-(set! *unchecked-math* true)
-
+(set! *unchecked-math* :warn-on-boxed)
 
 (defmacro stream
-  [code]
-  `(reify
-     ITypedReduce
-     (reduce [this rfn# acc#]
-       (let [rfn# (Transformables/toDoubleReductionFn rfn#)]
-         (loop [acc# acc#]
-           (if (not (reduced? acc#))
-             (recur (rfn# acc# (Casts/doubleCast ~code)))
-             (deref acc#)))))
-     DoubleSupplier
-     (getAsDouble [this#] ~code)
-     IDeref
-     (deref [this#] ~code)))
+  ([code]
+   `(reify
+      ITypedReduce
+      (reduce [this rfn# acc#]
+        (loop [acc# acc#]
+          (if (not (reduced? acc#))
+            (recur (rfn# acc# ~code))
+            (deref acc#))))
+      IFnDef$O
+      (invoke [this#] ~code)
+      IDeref
+      (deref [this#] ~code)))
+  ([l code]
+   `(let [l# ~l]
+      (if l#
+        (let [l# (long l#)]
+          (reify
+            ITypedReduce
+            (reduce [this# rfn# acc#]
+              (loop [idx# 0
+                     acc# acc#]
+                (if (and (< idx# l#)
+                         (not (reduced? acc#)))
+                  (recur (unchecked-inc idx#) (rfn# acc# ~code))
+                  (if (reduced? acc#)
+                    (deref acc#)
+                    acc#))))
+            Limited
+            (limit [this] l#)
+            IFnDef$O
+            (invoke [this#] ~code)
+            IDeref
+            (deref [this#] ~code)))
+        (stream ~code)))))
 
 
 (defn flat-stream
@@ -40,144 +64,82 @@
    (gaussian-stream (Random.))))
 
 
-(definterface LimitedConsumer
-  (^boolean accept [^double v]))
-
-
-(deftype DoubleSampler ^:private [^{:unsynchronized-mutable true
-                                    :tag long} n
-                                  ^long dlen
-                                  ^doubles data]
-  LimitedConsumer
-  (accept [this v]
-    (aset-double data n v)
-    (let [nn (unchecked-inc n)]
-      (set! n nn)
-      (== nn dlen)))
-
-  ham_fisted.IFnDef$ODO
-  (invokePrim [this acc v]
-    (if (.accept ^LimitedConsumer acc v)
-      (reduced acc)
-      acc))
-
-  (invoke [this] (DoubleSampler. 0 dlen (double-array dlen)))
-  (invoke [this acc] (.-data ^DoubleSampler acc)))
-
-
-(defn sample
-  (^doubles [^long n s]
-   (if (number? s)
-     (let [d (double-array n)]
-       (java.util.Arrays/fill d (double s)))
-     (hamf/reduce-reducer (DoubleSampler. 0 n nil) s)))
-  (^doubles [s]
-   (sample 100 s)))
-
-(defn- to-double-supplier
-  ^DoubleSupplier [f]
-  (cond
-    (instance? DoubleSupplier f)
-    f
-    (number? f)
-    (let [f (double f)]
-      (reify DoubleSupplier
-        (getAsDouble [this] f)))
-    (instance? IFn$D f)
-    (reify DoubleSupplier
-      (getAsDouble [this]
-        (.invokePrim ^IFn$D f)))
-    :else
-    (reify DoubleSupplier
-      (getAsDouble [this]
-        (Casts/doubleCast ^IFn$D f)))))
-
-
-(defn argtype
+(defn- to-supplier
   [s]
-  (if (number? s) :scalar :stream))
+  (if (number? s)
+    (fn [] s)
+    s))
+
+
+(deftype ^:private TakeNReducer [^{:unsynchronized-mutable true
+                         :tag long} n
+                       rfn]
+  IFnDef
+  (invoke [this acc v]
+    (let [acc (rfn acc v)
+          nn (unchecked-dec n)]
+      (set! n nn)
+      (if (> nn 0)
+        acc
+        (reduced acc)))))
 
 
 (defn take
   [^long n s]
-  (let [s (to-double-supplier s)]
+  (let [n (long (if-let [l (streams-p/limit s)]
+                  (min n (long l))
+                  n))
+        s (to-supplier s)]
     (reify
       ITypedReduce
       (reduce [this rfn acc]
-        (let [rfn (Transformables/toDoubleReductionFn rfn)]
-          (loop [idx 0
-                 acc acc]
-            (if (and (< idx n)
-                     (not (reduced? acc)))
-              (recur (unchecked-inc idx)
-                     (.invokePrim rfn acc (.getAsDouble s)))
-              (if (reduced? acc)
-                (deref acc)
-                acc)))))
-      DoubleSupplier
-      (getAsDouble [this]
-        (.getAsDouble s)))))
+        (reduce (TakeNReducer. n rfn) acc s))
+      Limited
+      (limit [this] n)
+      IFnDef$O
+      (invoke [this] (s)))))
+
+(defn- nil-min
+  ([] nil)
+  ([a] a)
+  ([a b]
+   (cond
+     (nil? a) b
+     (nil? b) a
+     :else
+     (min (long a) (long b)))))
 
 
 (defn filter
   [pred s]
-  (let [^DoublePredicate pred (if (instance? DoublePredicate pred)
-                                pred
-                                (reify DoublePredicate
-                                  (test [this v] (boolean (pred v)))))]
+  (let [^Predicate pred (if (instance? Predicate pred)
+                          pred
+                          (reify Predicate
+                            (test [this v] (boolean (pred v)))))]
     (reify
-      DoubleSupplier
-      (getAsDouble [this]
-        (let [s (to-double-supplier s)]
-          (loop []
-            (let [v (.getAsDouble s)]
-              (if (.test pred v)
-                v
-                (recur))))))
-      IDeref
-      (deref [this] (.getAsDouble this))
       ITypedReduce
       (reduce [this rfn acc]
-        (let [rfn (Transformables/toDoubleReductionFn rfn)]
-          (reduce
-           (reify ham_fisted.IFnDef$ODO
-             (invokePrim [this acc v]
-               (if (.test pred v)
-                 (.invokePrim rfn acc v)
-                 acc)))
-           acc
-           s))))))
-
-
-(defn- to-double-fn-1
-  ^IFn$DD [mapfn]
-  (if (instance? IFn$DD mapfn)
-    mapfn
-    (reify ham_fisted.IFnDef$DD
-      (invokePrim [this v] (Casts/doubleCast (mapfn v))))))
-
-
-(defn- to-double-fn-2
-  ^IFn$DDD [mapfn]
-  (if (instance? IFn$DDD mapfn)
-    mapfn
-    (reify ham_fisted.IFnDef$DDD
-      (invokePrim [this a b] (Casts/doubleCast (mapfn a b))))))
-
-
-(defn- to-double-fn-3
-  ^IFn$DDDD [mapfn]
-  (if (instance? IFn$DDDD mapfn)
-    mapfn
-    (fn ^double [^double a ^double b ^double c]
-      (Casts/doubleCast (mapfn a b c)))))
+        (reduce (fn [acc v]
+                  (if (.test pred v)
+                    (rfn acc v)
+                    acc))
+                acc s))
+      Limited
+      (limit [this] (streams-p/limit s))
+      IFnDef$O
+      (invoke [this]
+        (loop []
+          (let [v (s)]
+            (if (.test pred v)
+              v
+              (recur))))))))
 
 
 (defn- supplier-value-seq
   ^ISeq [supplier-vec]
   (let [^ISeq sv (seq supplier-vec)]
     (reify ISeq
-      (first [this] (.getAsDouble ^DoubleSupplier (.first sv)))
+      (first [this] ((.first sv)))
       (next [this] (when-let [nn (.next sv)]
                      (supplier-value-seq nn)))
       (more [this] (when-let [nn (.more sv)]
@@ -186,54 +148,62 @@
       (cons [this o]
         (supplier-value-seq (cons o supplier-vec))))))
 
-
 (defn- map-n
-  [map-fn a b c args]
-  (let [sargs (-> (into [] (comp cat (clojure.core/map to-double-supplier))
-                        [[a b c] args])
-                  (supplier-value-seq))]
-    (stream (.applyTo ^clojure.lang.IFn map-fn sargs))))
-
+  [mapfn a b args]
+  (let [argseq [[a b] args]
+        args (-> (into [] (comp cat (clojure.core/map to-supplier))
+                       argseq)
+                 (supplier-value-seq))
+        l (transduce (comp cat (clojure.core/map streams-p/limit)) nil-min argseq)]
+    (stream l (.applyTo ^clojure.lang.IFn mapfn args))))
 
 (defn map
   ([mapfn s]
    (if (number? s)
      (mapfn s)
-     (let [mapfn (to-double-fn-1 mapfn)
-           s (to-double-supplier s)]
-       (stream (.invokePrim mapfn (.getAsDouble s))))))
+     (reify
+       ITypedReduce
+       (reduce [this rfn acc]
+         (reduce (fn [acc v]
+                   (rfn acc (mapfn v)))
+                 acc s))
+       Limited
+       (limit [this] (streams-p/limit s))
+       IFnDef$O
+       (invoke [this] (mapfn (s))))))
   ([mapfn a b]
    (if (or (number? a) (number? b))
      (cond
        (and (number? a) (number? b))
        (mapfn a b)
        (number? a)
-       (map (let [mapfn (to-double-fn-2 mapfn)
-                  a (double a)]
-              (reify ham_fisted.IFnDef$DD
-                (invokePrim [this bb]
-                  (.invokePrim mapfn a bb))))
-            b)
-       :else ;;b is a number
-       (map (let [mapfn (to-double-fn-2 mapfn)
-                  b (double b)]
-              (reify ham_fisted.IFnDef$DD
-                (invokePrim [this aa]
-                  (.invokePrim mapfn aa b))))
-            a))
-     (let [^IFn$DDD mapfn (to-double-fn-2 mapfn)
-           a (to-double-supplier a)
-           b (to-double-supplier b)]
-       (stream (.invokePrim mapfn (.getAsDouble a) (.getAsDouble b))))))
-  ([mapfn a b c]
-   (let [^IFn$DDDD mapfn (to-double-fn-3 mapfn)
-         a (to-double-supplier a)
-         b (to-double-supplier b)
-         c (to-double-supplier c)]
-     (stream (.invokePrim mapfn (.getAsDouble a) (.getAsDouble b) (.getAsDouble c)))))
-  ([mapfn a b c & args]
-   (map-n mapfn a b c args)))
-
+       (map (fn [bb] (mapfn a bb)) b)
+       :else
+       (map (fn [aa] (mapfn aa b)) a))
+     (let [l (nil-min (streams-p/limit a) (streams-p/limit b))]
+       (reify
+         ITypedReduce
+         (reduce [this rfn acc]
+           (if l
+             (let [l (long l)]
+               (loop [idx 0
+                      acc acc]
+                 (if (and (< idx l)
+                          (not (reduced? acc)))
+                   (recur (unchecked-inc idx) (rfn acc (mapfn (a) (b))))
+                   (if (reduced? acc)
+                     (deref acc)
+                     acc))))
+               (loop [acc acc]
+                 (if (not (reduced? acc))
+                   (recur (rfn acc (mapfn (a) (b))))
+                   (deref acc)))))
+         Limited
+         (limit [this] l)
+         IFnDef$O
+         (invoke [this] (mapfn (a) (b)))))))
+  ([mapfn a b & args]
+   (map-n mapfn a b args)))
 
 
 (defmacro def-double-op
