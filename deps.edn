@@ -1,0 +1,4 @@
+{:paths ["src"]
+ :deps {com.cnuernber/ham-fisted {:mvn/version "1.000-beta-90"}
+        kixi/stats {:mvn/version "0.5.5"}
+        generateme/fastmath {:mvn/version "2.1.8"}}}
