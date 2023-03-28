@@ -5,6 +5,8 @@ Simple programmatic model for infinite streams of numbers or objects primitive
 and doing arithmetic operations (in double space) on them.  Provides basic structure for
 monte-carlo simulations.
 
+Streams are an interesting concept as they are lazy noncaching and also not indexable.
+
 Use fastmath/random for distributions and the transducers in kixi.stats.core for
 basic stats.
 
