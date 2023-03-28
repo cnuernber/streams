@@ -25,6 +25,7 @@ user> (streams/sample 20 (streams/+ (streams/uniform-stream)
  2.2510286054117365, 0.8765206662618311, 1.213693353303307, 1.2334256767045018]
 ```"
   (:require [ham-fisted.api :as hamf]
+            [ham-fisted.protocols :as hamf-p]
             [fastmath.random :as fast-r]
             [fastmath.protocols :as fast-p])
   (:import [ham_fisted Transformables ITypedReduce Casts IFnDef IFnDef$O]
@@ -63,9 +64,7 @@ user> (streams/sample 20 (streams/+ (streams/uniform-stream)
     (instance? Iterable s)
     (.iterator ^Iterable s)
     :else
-    (if-let [s (seq s)]
-      (.iterator ^Iterable s)
-      (iter nil))))
+    (.iterator ^Iterable (hamf-p/->iterable s))))
 
 
 (defmacro stream
