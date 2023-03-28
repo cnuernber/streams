@@ -39,6 +39,15 @@ nil
 
 # Usage
 
+Basic nongraphing dependencies:
+
+```clojure
+com.cnuernber/streams {:git/url "https://github.com/cnuernber/streams/"
+                       :sha "0925d59e082355f0282e524779d0e226973bfde5"}
+```
+
+See graphs namespace api docs for graphing dependencies - and off we go...
+
 
 ```clojure
 user> (require '[streams.api :as streams])
