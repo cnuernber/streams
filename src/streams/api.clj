@@ -1,4 +1,26 @@
 (ns streams.api
+  "Simple api for creating streams based on random sampling from distributions
+  along with minimal arithmetic and manipulation pathways.  Arithmetic ops can be
+  used on scalars and streams.
+
+  A stream is an object that when called as a function with no arguments returns
+  the next value in the stream but that also efficiently implements clojure.lang.IReduceInit
+  and clojure.lang.IReduce.
+
+  Only arithmetic ops are specialized to doubles for performance reasons; streams can be
+  streams of arbitrary objects or really anything that implements IReduceInit.
+
+```clojure
+user> (require '[streams.api :as streams])
+nil
+user> (streams/sample 20 (streams/+ (streams/uniform-stream)
+                                    (streams/* 2.0 (streams/uniform-stream))))
+[1.5501202319376306, 0.7635588117246281, 2.3532562778994093, 2.209371262799305,
+ 1.3152501796238574, 1.0452647068536018, 0.7894558426559145, 2.198800934691462,
+ 0.26506472311487705, 2.538111046716471, 2.9001166286861992, 1.3705779064113792,
+ 2.1755184584145306, 1.3351040137971486, 1.6120692556203424, 1.6107428912151116,
+ 2.2510286054117365, 0.8765206662618311, 1.213693353303307, 1.2334256767045018]
+```"
   (:require [ham-fisted.api :as hamf]
             [streams.protocols :as streams-p]
             [fastmath.random :as fast-r]
@@ -229,8 +251,13 @@
 
 
 (defmacro def-double-op
+  "Define a unary and binary double from clojure.core or another library such as +.
+  Operation must have 1,2,+ arities."
   [op-sym]
-  (let [core-sym (symbol (str "clojure.core/" (name op-sym)))]
+  (let [core-sym (if (namespace op-sym)
+                   op-sym
+                   (symbol (str "clojure.core/" (name op-sym))))
+        op-sym (symbol (name op-sym))]
     ;;typehinting these to produce the ideal functions signatures
     `(let [un-arg# (fn ^double [^double v#] (~core-sym v#))
            bi-arg# (fn ^double [^double a# ^double b#] (~core-sym a# b#))
@@ -248,3 +275,43 @@ may be streams or double scalars." (name op-sym))
 (def-double-op *)
 (def-double-op /)
 (def-double-op -)
+
+(defmacro def-binary-op
+  "Define a unary and binary double from clojure.core or another library such as +.
+  Operation need only have single arity of 2."
+  ([op-sym docstr]
+   (let [core-sym (if (namespace op-sym)
+                    op-sym
+                    (symbol (str "clojure.core/" (name op-sym))))
+         op-sym (symbol (name op-sym))]
+     ;;typehinting these to produce the ideal functions signatures
+     `(let [bi-arg# (fn ^double [^double a# ^double b#] (~core-sym a# b#))]
+        (defn ~op-sym
+          ~docstr
+          ([~'a ~'b] (map bi-arg# ~'a ~'b))))))
+  ([op-sym]
+   `(def-binary-op ~op-sym ~(format "Binary operation %s.  Operates in the space of doubles. Arguments
+may be streams or double scalars." (name op-sym)))))
+
+
+(def-binary-op fastmath.core/fpow "Fast pow where right-hand-side is interpreted as integer values.")
+
+
+(defmacro def-unary-op
+  "Define a unary and binary double from clojure.core or another library such as +.
+  Operation need only have single arity of 2."
+  ([op-sym docstr]
+   (let [core-sym (if (namespace op-sym)
+                    op-sym
+                    (symbol (str "clojure.core/" (name op-sym))))
+         op-sym (symbol (name op-sym))]
+     ;;typehinting these to produce the ideal functions signatures
+     `(let [un-arg# (fn ^double [^double a#] (~core-sym a#))]
+        (defn ~op-sym
+          ~docstr
+          ([~'a] (map un-arg# ~'a))))))
+  ([op-sym]
+   `(def-unary-op ~op-sym ~(format "Unary operation %s.  Operates in the space of doubles. Argument may be a streams or a double." (name op-sym)))))
+
+
+(def-unary-op fastmath.core/log1p)
