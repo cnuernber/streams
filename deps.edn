@@ -4,7 +4,15 @@
         generateme/fastmath {:mvn/version "2.1.8"}}
  :aliases
  {:dev
-  {:extra-deps {criterium/criterium {:mvn/version "0.4.5"}}}
+  {:extra-deps {criterium/criterium {:mvn/version "0.4.5"}
+                techascent/tech.viz {:mvn/version "6.00-beta-16-4"}
+                com.cnuernber/charred {:mvn/version "1.026"}
+                applied-science/darkstar
+                {:git/url "https://github.com/appliedsciencestudio/darkstar/"
+                 :sha "abd480cc382b7ae143f7902ee9d300cdc1a705cc"
+                 :exclusions [org.graalvm.js/js org.graalvm.js/js-scriptengine]}
+                org.graalvm.js/js {:mvn/version "20.3.2"}
+                org.graalvm.js/js-scriptengine {:mvn/version "20.3.2"}}}
   :test
   {:extra-deps {com.cognitect/test-runner
                 {:git/url "https://github.com/cognitect-labs/test-runner"
@@ -38,4 +46,5 @@ Monte Carlo simulation."
                :output-path "docs"
                :doc-paths ["topics"]
                :source-uri "https://github.com/cnuernber/streams/blob/master/{filepath}#L{line}"
-               :namespaces [streams.api]}}}}
+               :namespaces [streams.api
+                            streams.graphs]}}}}

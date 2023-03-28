@@ -1,4 +1,4 @@
 #!/bin/bash
 
 
-clj -X:codox
+clj -A:dev -X:codox

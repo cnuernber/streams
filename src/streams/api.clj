@@ -13,6 +13,8 @@
   Only arithmetic ops are specialized to doubles for performance reasons; streams can be
   streams of arbitrary objects or really anything that implements IReduceInit.
 
+  Note that dtype-next has [reservior-sampling](https://cnuernber.github.io/dtype-next/tech.v3.datatype.sampling.html).
+
 ```clojure
 user> (require '[streams.api :as streams])
 nil
@@ -26,13 +28,14 @@ user> (streams/sample 20 (streams/+ (streams/uniform-stream)
 ```"
   (:require [ham-fisted.api :as hamf]
             [ham-fisted.protocols :as hamf-p]
+            [ham-fisted.lazy-noncaching :as lznc]
             [fastmath.random :as fast-r]
             [fastmath.protocols :as fast-p])
-  (:import [ham_fisted Transformables ITypedReduce Casts IFnDef IFnDef$O]
+  (:import [ham_fisted Transformables ITypedReduce Casts IFnDef IFnDef$O Reductions]
            [java.util.function Supplier Predicate]
            [java.util Random Iterator NoSuchElementException Map]
-           [clojure.lang IDeref IFn ISeq ArraySeq])
-  (:refer-clojure :exclude [take filter map + - / *]))
+           [clojure.lang IDeref IFn ISeq ArraySeq Sequential])
+  (:refer-clojure :exclude [take filter map interleave + - / *]))
 
 
 (set! *warn-on-reflection* true)
@@ -75,6 +78,7 @@ user> (streams/sample 20 (streams/+ (streams/uniform-stream)
       (if l#
         (let [l# (long l#)]
           (reify
+            Sequential
             ITypedReduce
             (reduce [this# rfn# acc#]
               (loop [idx# 0
@@ -92,6 +96,7 @@ user> (streams/sample 20 (streams/+ (streams/uniform-stream)
             IDeref
             (deref [this#] (.invoke this#))))
         (reify
+          Sequential
           ITypedReduce
           (reduce [this rfn# acc#]
             (loop [acc# acc#]
@@ -187,6 +192,7 @@ user> (streams/sample 20 (streams/+ (streams/uniform-stream)
     '()
     :else
     (reify
+      Sequential
       ITypedReduce
       (reduce [this rfn acc]
         (reduce (TakeNReducer. n rfn) acc s))
@@ -250,6 +256,7 @@ user> (streams/sample 20 (streams/+ (streams/uniform-stream)
                             (reify Predicate
                               (test [this v] (boolean (pred v)))))]
       (reify
+        Sequential
         ITypedReduce
         (reduce [this rfn acc]
           (reduce (fn [acc v]
@@ -288,6 +295,7 @@ user> (streams/sample 20 (streams/+ (streams/uniform-stream)
   [mapfn argseq]
   (let [update-create #(map-args->iter-create argseq)]
     (reify
+      Sequential
       ITypedReduce
       (reduce [this rfn acc]
         (let [updater (update-create)]
@@ -326,6 +334,7 @@ user> (streams/sample 20 (streams/+ (streams/uniform-stream)
      (nil? (seq s)) '()
      :else
      (reify
+       Sequential
        ITypedReduce
        (reduce [this rfn acc]
          (reduce (fn [acc v]
@@ -361,6 +370,175 @@ user> (streams/sample 20 (streams/+ (streams/uniform-stream)
   ([mapfn a b c & args]
    (map-n #(.applyTo ^IFn mapfn (ArraySeq/create ^objects %))
           [[a b c] args])))
+
+(defn- reduce-has-next
+  [iters]
+  (reduce (fn [acc ^Iterator iter]
+            (if (not (.hasNext iter))
+              (reduced false)
+              true))
+          false
+          iters))
+
+
+(deftype ^:private InterleaveIter [^objects iterators
+                                   ^{:tag long
+                                     :unsynchronized-mutable true} iteridx
+                                   ^:unsynchronized-mutable has-next]
+  Iterator
+  (hasNext [this] has-next)
+  (next [this]
+    (when-not has-next
+      (throw (NoSuchElementException.)))
+    (let [len (alength iterators)
+          v (.next ^Iterator (aget iterators iteridx))
+          idx (unchecked-inc iteridx)
+          hn (if (== idx len)
+               (reduce-has-next iterators)
+               has-next)]
+      (set! iteridx (rem idx len))
+      (set! has-next hn)
+      v)))
+
+
+(defn interleave
+  "Fast noncaching form of interleave."
+  ([] '())
+  ([c0] c0)
+  ([c0 c1]
+   (if (or (nil? (seq c0))
+           (nil? (seq c1)))
+     '()
+     (reify
+       Sequential
+       ITypedReduce
+       (reduce [this rfn acc]
+         (let [i0 (iter c0)
+               i1 (iter c1)]
+           (loop [continue? (and (.hasNext i0) (.hasNext i1)
+                                 (not (reduced? acc)))
+                  acc acc]
+             (if continue?
+               (let [acc (rfn acc (.next i0))
+                     acc (if-not (reduced? acc)
+                           (rfn acc (.next i1)))]
+                 (recur (and (.hasNext i0) (.hasNext i1)
+                             (not (reduced? acc)))
+                        acc))
+               (if (reduced? acc) (deref acc) acc)))))
+       Iterable
+       (iterator [this]
+         (let [i0 (iter c0)
+               i1 (iter c1)]
+           (InterleaveIter. (hamf/object-array [i0 i1]) 0 (and (.hasNext i0) (.hasNext i1)))))
+       IFnDef$O
+       (invoke [this]
+         (.next (iter this))))))
+  ([c0 c1 & args]
+   (let [all-args (lznc/apply-concat [[c0 c1] args])
+         iter-fn (fn [] (let [iters (hamf/object-array (lznc/map iter all-args))]
+                          (InterleaveIter. iters 0 (reduce-has-next iters))))]
+     (reify
+       Sequential
+       ITypedReduce
+       (reduce [this rfn acc]
+         (Reductions/iterReduce this acc rfn))
+       Iterable
+       (iterator [this]
+         (let [iters (hamf/object-array (lznc/map iter all-args))]
+           (InterleaveIter. iters 0 (reduce-has-next iters))))
+       IFnDef$O
+       (invoke [this]
+         (.next (iter this)))))))
+
+(deftype ProbInterleaveIter [^doubles norm-probs
+                             rng
+                             ^objects iters
+                             ^:unsynchronized-mutable has-next
+                             ^:unsynchronized-mutable next-value]
+  Iterator
+  (hasNext [this] has-next)
+  (next [this]
+    (when-not has-next
+      (throw (NoSuchElementException. "Out of data")))
+    (let [v next-value
+          nd (double (rng))
+          len (alength norm-probs)
+          next-idx (long
+                    (loop [idx 0]
+                      (if (and (< idx len) (< (aget norm-probs idx) nd))
+                        (recur (unchecked-inc idx))
+                        idx)))
+          ^Iterator iter (aget iters next-idx)]
+      (set! has-next (.hasNext iter))
+      (set! next-value (if has-next (.next iter) nil))
+      v)))
+
+(defn- opts->rng
+  [opts]
+  (if-let [rng (get opts :rng)]
+    rng
+    (let [^Random rng
+          (if-let [seed (get opts :seed)]
+            (Random. (int seed))
+            (Random.))]
+      #(.nextDouble rng))))
+
+(defn prob-interleave
+  "Probabilistically interleave multiple streams.  Each argument must be a tuple
+  of [stream prob] and probabilities will be used with a flat distribution to decide
+  which stream to sample from.  Iteration stops when any of the component streams
+  is empty.
+
+  Options:
+
+  * `:seed` - Provide an integer seed to construct a new java.util.Random.
+  * `:rng` - Provide a clojure function that takes no arguments and returns a double between
+             [0-1].
+
+  Example:
+
+```clojure
+streams.graphs> (streams/sample 20 (streams/prob-interleave [[(streams/gaussian-stream) 0.1]
+                                                             [(streams/gaussian-stream) 0.5]
+                                                             [(streams/stream 2 1) 0.5]]))
+[0.3261978516358189, 0.23722603841776788, 1.0, -0.16219928642385675, 1.0,
+ 0.43443517752548294, -1.93659876689825]
+```"
+  ([args opts]
+   (if-not (seq args)
+     '()
+     (let [probs (vec (lznc/map second args))
+           streams (vec (lznc/map first args))
+           _ (when-not (every? number? probs)
+               (throw (RuntimeException. "All arguments must be tuples with the first member
+a stream and the second member a number.")))
+           prob-sum (double (hamf/sum-fast probs))
+           norm-probs (double-array (count probs))
+           _ (reduce (hamf/indexed-accum
+                      acc idx prob
+                      (let [acc (double (clojure.core/+
+                                         (double acc) (clojure.core//
+                                                       (double prob) prob-sum)))]
+                        (aset norm-probs idx acc)
+                        acc))
+                     0.0
+                     probs)
+           rng (opts->rng opts)]
+       (reify
+         Sequential
+         ITypedReduce
+         (reduce [this rfn acc]
+           (Reductions/iterReduce this acc rfn))
+         Iterable
+         (iterator [this]
+           (let [iters (hamf/object-array (lznc/map iter streams))]
+             (doto (ProbInterleaveIter. norm-probs rng iters true nil)
+               (.next))))
+         IFnDef$O
+         (invoke [this]
+           (.next (iter this)))))))
+  ([args] (prob-interleave args nil)))
 
 
 (defmacro def-double-op

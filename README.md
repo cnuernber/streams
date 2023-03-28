@@ -14,6 +14,28 @@ basic stats.
 * [API Docs](https://cnuernber.github.io/streams/)
 
 
+```clojure
+user> (-> (streams/interleave (streams/gaussian-stream)
+                              (streams/+ (streams/gaussian-stream) 10))
+          (graphs/stream-area-chart {:title :dual-lobe-gaussian
+                                     :width 400 :height 100
+                                     :n-bins 100})
+          (graphs/spit-chart-svg-to-file "docs/dual-lobe-gaussian.svg"))
+nil
+```
+
+![gaussian](docs/dual-lobe-gaussian.svg)
+
+```clojure
+user> (-> (streams/fastmath-stream :exponential)
+          (graphs/stream-area-chart {:title :exponential
+                              :width 400 :height 100
+                              :n-bins 100})
+          (graphs/spit-chart-svg-to-file "docs/exponential.svg"))
+nil
+```
+
+![exponential](docs/dual-lobe-gaussian.svg)
 
 # Usage
 
