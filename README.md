@@ -9,6 +9,9 @@ Use fastmath/random for distributions and the transducers in kixi.stats.core for
 basic stats.
 
 
+* [API Docs](https://cnuernber.github.io/streams/)
+
+
 
 # Usage
 
