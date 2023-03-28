@@ -1,7 +1,8 @@
-(ns streams.untyped
+(ns streams.api
   (:require [ham-fisted.api :as hamf]
-            [streams.protocols :as streams-p])
-
+            [streams.protocols :as streams-p]
+            [fastmath.random :as fast-r]
+            [fastmath.protocols :as fast-p])
   (:import [ham_fisted Transformables ITypedReduce Casts IFnDef IFnDef$O]
            [streams.protocols Limited]
            [java.util.function Supplier Predicate]
@@ -50,18 +51,33 @@
         (stream ~code)))))
 
 
-(defn flat-stream
-  ([^Random r]
-   (stream (.nextDouble r)))
+(defn uniform-stream
+  "Create a uniform stream with values [0-1]"
+  ([n ^Random r]
+   (stream n (.nextDouble r)))
+  ([n]
+   (uniform-stream n (Random.)))
   ([]
-   (flat-stream (Random.))))
+   (uniform-stream nil (Random.))))
 
 
 (defn gaussian-stream
-  ([^Random r]
-   (stream (.nextGaussian r)))
+  "Create a gaussian stream with mean 0 variance 1"
+  ([n ^Random r]
+   (stream n (.nextGaussian r)))
+  ([n]
+   (gaussian-stream n (Random.)))
   ([]
-   (gaussian-stream (Random.))))
+   (gaussian-stream nil (Random.))))
+
+
+(defn fastmath-stream
+  "Create a stream based on a
+  [fastmath distribution](https://generateme.github.io/fastmath/fastmath.random.html#var-distribution)."
+  ([n key opts] (let [dist (fast-r/distribution key opts)]
+              (stream n (fast-p/sample dist))))
+  ([key opts] (fastmath-stream nil key opts))
+  ([key] (fastmath-stream nil key nil)))
 
 
 (defn- to-supplier
@@ -85,6 +101,7 @@
 
 
 (defn take
+  "Take at most N elements from this stream.  Returns a new stream."
   [^long n s]
   (let [n (long (if-let [l (streams-p/limit s)]
                   (min n (long l))
@@ -99,6 +116,18 @@
       IFnDef$O
       (invoke [this] (s)))))
 
+
+(defn sample
+  "Sample stream into a double array.  If n is not provided, stream must either
+  already have a limit or a default one of 1000 is provided."
+  (^doubles [s]
+   (if-let [l (streams-p/limit s)]
+     (hamf/double-array s)
+     (hamf/double-array (take 1000 s))))
+  (^doubles [n s]
+   (hamf/double-array (take n s))))
+
+
 (defn- nil-min
   ([] nil)
   ([a] a)
@@ -111,6 +140,7 @@
 
 
 (defn filter
+  "Filter a stream based on a predicate.  Returns a new stream without changing its limit."
   [pred s]
   (let [^Predicate pred (if (instance? Predicate pred)
                           pred
@@ -149,15 +179,17 @@
         (supplier-value-seq (cons o supplier-vec))))))
 
 (defn- map-n
-  [mapfn a b args]
-  (let [argseq [[a b] args]
+  [mapfn a b c args]
+  (let [argseq [[a b c] args]
         args (-> (into [] (comp cat (clojure.core/map to-supplier))
                        argseq)
-                 (supplier-value-seq))
-        l (transduce (comp cat (clojure.core/map streams-p/limit)) nil-min argseq)]
-    (stream l (.applyTo ^clojure.lang.IFn mapfn args))))
+                 (supplier-value-seq))]
+    (stream (transduce (comp cat (clojure.core/map streams-p/limit)) nil-min argseq)
+            (.applyTo ^clojure.lang.IFn mapfn args))))
 
 (defn map
+  "Map a function onto one or more streams.  Returns a new stream whose limit is the least
+  of any of the streams."
   ([mapfn s]
    (if (number? s)
      (mapfn s)
@@ -180,30 +212,20 @@
        (map (fn [bb] (mapfn a bb)) b)
        :else
        (map (fn [aa] (mapfn aa b)) a))
-     (let [l (nil-min (streams-p/limit a) (streams-p/limit b))]
-       (reify
-         ITypedReduce
-         (reduce [this rfn acc]
-           (if l
-             (let [l (long l)]
-               (loop [idx 0
-                      acc acc]
-                 (if (and (< idx l)
-                          (not (reduced? acc)))
-                   (recur (unchecked-inc idx) (rfn acc (mapfn (a) (b))))
-                   (if (reduced? acc)
-                     (deref acc)
-                     acc))))
-               (loop [acc acc]
-                 (if (not (reduced? acc))
-                   (recur (rfn acc (mapfn (a) (b))))
-                   (deref acc)))))
-         Limited
-         (limit [this] l)
-         IFnDef$O
-         (invoke [this] (mapfn (a) (b)))))))
-  ([mapfn a b & args]
-   (map-n mapfn a b args)))
+     (stream (nil-min (streams-p/limit a) (streams-p/limit b))
+             (mapfn (a) (b)))))
+  ([mapfn a b c]
+   (if (and (number? a) (number? b) (number? c))
+     (mapfn a b c)
+     (let [a (to-supplier a)
+           b (to-supplier b)
+           c (to-supplier c)]
+       (stream (nil-min (streams-p/limit a)
+                        (nil-min (streams-p/limit b)
+                                 (streams-p/limit c)))
+               (mapfn (a) (b) (c))))))
+  ([mapfn a b c & args]
+   (map-n mapfn a b c args)))
 
 
 (defmacro def-double-op
@@ -214,6 +236,8 @@
            bi-arg# (fn ^double [^double a# ^double b#] (~core-sym a# b#))
            tri-arg# (fn ^double [^double a# ^double b# ^double c#] (~core-sym a# b# c#))]
        (defn ~op-sym
+         ~(format "Binary or unary operation %s.  Operates in the space of doubles. Arguments
+may be streams or double scalars." (name op-sym))
          ([~'a] (map un-arg# ~'a))
          ([~'a ~'b] (map bi-arg# ~'a ~'b))
          ([~'a ~'b ~'c] (map tri-arg# ~'a ~'b ~'c))

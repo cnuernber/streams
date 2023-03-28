@@ -15,9 +15,11 @@ user> (require '[streams.api :as streams])
 nil
 user> (streams/gaussian-stream)
 #<api$gaussian_stream$reify__12152@55cdf74d: 0.6240818464335962>
-user> @s
+user> (def s (streams/gaussian-stream))
+#'user/s
+user> (s)
 -0.16975820365256886
-user> @s
+user> (s)
 -1.6307662273913865
 user> (streams/sample 10 s)
 [-0.6404845735349934, -1.0984499305114408, -0.5752360591253568, 0.7952341368967761,
@@ -61,6 +63,8 @@ user> (fast-p/sample exp-d)
 1.1145401213453967
 user> (fast-p/sample exp-d)
 4.848989177173837
+
+user> ;;s is passed into + along with exponential stream
 user> (->> (let [dist (fast-r/distribution :exponential)]
              (streams/stream (fast-p/sample dist)))
            (streams/+ s 10)
@@ -75,4 +79,16 @@ user> (->> (let [dist (fast-r/distribution :exponential)]
  :variance 1.9930823384144312,
  :max 21.25865140655251,
  :mean 11.986870739237215}
+user> (->> (streams/fastmath-stream :exponential)
+           (streams/+ s 10)
+           (streams/take 10000)
+           (hamf/reduce-reducer
+             (hamf/compose-reducers {:mean kixi/mean
+                                     :variance kixi/variance
+                                     :min kixi/min
+                                     :max kixi/max})))
+{:min 6.659285377918934,
+ :variance 1.970266932907259,
+ :max 18.57889358544537,
+ :mean 10.982617281509123}
  ```
