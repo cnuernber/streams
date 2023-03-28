@@ -35,7 +35,7 @@ user> (-> (streams/fastmath-stream :exponential)
 nil
 ```
 
-![exponential](docs/dual-lobe-gaussian.svg)
+![exponential](docs/exponential.svg)
 
 # Usage
 
