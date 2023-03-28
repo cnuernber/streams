@@ -2,8 +2,11 @@
 
 
 Simple programmatic model for infinite creating streams of primitive
-doubles and doing arithmetic operations on them.  Provides most basic structure to
-monte-carlo simulation.
+doubles and doing arithmetic operations on them.  Provides basic structure for
+monte-carlo simulations.
+
+Use fastmath/random for distributions and the transducers in kixi.stats.core for
+basic stats.
 
 
 
