@@ -5,7 +5,10 @@
 
   A stream is an object that when called as a function with no arguments returns
   the next value in the stream but that also efficiently implements clojure.lang.IReduceInit
-  and clojure.lang.IReduce.
+  and clojure.lang.IReduce.  These are lazy noncaching versions of clojure's sequences.
+
+  Streams are strictly serial entities when they are being iterated.  There are no provisions
+  made to protect against threading issues.
 
   Only arithmetic ops are specialized to doubles for performance reasons; streams can be
   streams of arbitrary objects or really anything that implements IReduceInit.
@@ -22,33 +25,52 @@ user> (streams/sample 20 (streams/+ (streams/uniform-stream)
  2.2510286054117365, 0.8765206662618311, 1.213693353303307, 1.2334256767045018]
 ```"
   (:require [ham-fisted.api :as hamf]
-            [streams.protocols :as streams-p]
             [fastmath.random :as fast-r]
             [fastmath.protocols :as fast-p])
   (:import [ham_fisted Transformables ITypedReduce Casts IFnDef IFnDef$O]
-           [streams.protocols Limited]
            [java.util.function Supplier Predicate]
-           [java.util Random]
-           [clojure.lang IDeref IFn ISeq])
+           [java.util Random Iterator NoSuchElementException Map]
+           [clojure.lang IDeref IFn ISeq ArraySeq])
   (:refer-clojure :exclude [take filter map + - / *]))
 
 
 (set! *warn-on-reflection* true)
 (set! *unchecked-math* :warn-on-boxed)
 
+(deftype ^:private CountingIter [^{:unsynchronized-mutable true
+                                   :tag long} n
+                                 data-fn]
+  Iterator
+  (hasNext [this] (> n 0))
+  (next [this]
+    (when (<= n 0)
+      (throw (NoSuchElementException. "Iteration out of range")))
+    (let [v (data-fn)
+          nn (unchecked-dec n)]
+      (set! n nn)
+      v)))
+
+
+(defn- iter
+  ^Iterator [s]
+  (cond
+    (number? s)
+    (reify Iterator (hasNext [t] true) (next [t] s))
+    (nil? s)
+    (reify Iterator (hasNext [t] false) (next [t] (throw (NoSuchElementException.))))
+    (instance? Map s)
+    (.iterator (.entrySet ^Map s))
+    (instance? Iterable s)
+    (.iterator ^Iterable s)
+    :else
+    (if-let [s (seq s)]
+      (.iterator ^Iterable s)
+      (iter nil))))
+
+
 (defmacro stream
   ([code]
-   `(reify
-      ITypedReduce
-      (reduce [this rfn# acc#]
-        (loop [acc# acc#]
-          (if (not (reduced? acc#))
-            (recur (rfn# acc# ~code))
-            (deref acc#))))
-      IFnDef$O
-      (invoke [this#] ~code)
-      IDeref
-      (deref [this#] ~code)))
+   `(stream nil ~code))
   ([l code]
    `(let [l# ~l]
       (if l#
@@ -64,13 +86,28 @@ user> (streams/sample 20 (streams/+ (streams/uniform-stream)
                   (if (reduced? acc#)
                     (deref acc#)
                     acc#))))
-            Limited
-            (limit [this] l#)
+            Iterable
+            (iterator [this#] (CountingIter. l# this#))
             IFnDef$O
             (invoke [this#] ~code)
             IDeref
-            (deref [this#] ~code)))
-        (stream ~code)))))
+            (deref [this#] (.invoke this#))))
+        (reify
+          ITypedReduce
+          (reduce [this rfn# acc#]
+            (loop [acc# acc#]
+              (if (not (reduced? acc#))
+                (recur (rfn# acc# ~code))
+                (deref acc#))))
+          Iterable
+          (iterator [this#]
+            (reify Iterator
+              (hasNext [i] true)
+              (next [i] (.invoke this#))))
+          IFnDef$O
+          (invoke [this#] ~code)
+          IDeref
+          (deref [this#] (.invoke this#)))))))
 
 
 (defn uniform-stream
@@ -105,7 +142,7 @@ user> (streams/sample 20 (streams/+ (streams/uniform-stream)
 (defn- to-supplier
   [s]
   (if (number? s)
-    (fn [] s)
+    (stream s)
     s))
 
 
@@ -122,111 +159,190 @@ user> (streams/sample 20 (streams/+ (streams/uniform-stream)
         (reduced acc)))))
 
 
+(deftype ^:private CountingIterIter [^{:unsynchronized-mutable true
+                                       :tag long} n
+                                     ^Iterator data-iter
+                                     ^:unsynchronized-mutable has-elem
+                                     ^:unsynchronized-mutable next-obj]
+  Iterator
+  (hasNext [this] has-elem)
+  (next [this]
+    (when (not has-elem)
+      (throw (NoSuchElementException. "Iteration out of range")))
+    (let [v next-obj
+          nn (unchecked-dec n)
+          he (and (>= nn 0) (.hasNext data-iter))]
+      (set! has-elem he)
+      (set! next-obj (if he (.next data-iter) nil))
+      (set! n nn)
+      v)))
+
+
 (defn take
   "Take at most N elements from this stream.  Returns a new stream."
   [^long n s]
-  (let [n (long (if-let [l (streams-p/limit s)]
-                  (min n (long l))
-                  n))
-        s (to-supplier s)]
+  (cond
+    (number? s)
+    (stream n s)
+    (nil? (seq s))
+    '()
+    :else
     (reify
       ITypedReduce
       (reduce [this rfn acc]
         (reduce (TakeNReducer. n rfn) acc s))
-      Limited
-      (limit [this] n)
+      Iterable
+      (iterator [this]
+        (doto (CountingIterIter. n (iter s) true nil)
+          (.next)))
       IFnDef$O
-      (invoke [this] (s)))))
+      (invoke [this]
+        (if (<= n 0)
+          (throw (NoSuchElementException. "Iteration out of range"))
+          (.next (iter s)))))))
 
 
 (defn sample
   "Sample stream into a double array.  If n is not provided, stream must either
-  already have a limit or a default one of 1000 is provided."
+  already have a limit or an oom is imminent."
   (^doubles [s]
-   (if-let [l (streams-p/limit s)]
-     (hamf/double-array s)
-     (hamf/double-array (take 1000 s))))
+   (hamf/double-array s))
   (^doubles [n s]
    (hamf/double-array (take n s))))
 
 
-(defn- nil-min
-  ([] nil)
-  ([a] a)
-  ([a b]
-   (cond
-     (nil? a) b
-     (nil? b) a
-     :else
-     (min (long a) (long b)))))
+(deftype ^:private FilterIter [^Iterator data-iter
+                               ^Predicate pred
+                               ^:unsynchronized-mutable next-obj
+                               ^:unsynchronized-mutable has-item]
+  Iterator
+  (hasNext [this] has-item)
+  (next [this]
+    (when-not has-item
+      (throw (NoSuchElementException. "Iteration past range")))
+    (let [v next-obj]
+      (loop [he (.hasNext data-iter)]
+        (if he
+          (let [vv (.next data-iter)]
+            (if (.test pred vv)
+              (do
+                (set! next-obj vv)
+                (set! has-item true))
+              (recur (.hasNext data-iter))))
+          (do
+            (set! next-obj nil)
+            (set! has-item false))))
+      v)))
 
 
 (defn filter
-  "Filter a stream based on a predicate.  Returns a new stream without changing its limit."
+  "Filter a stream based on a predicate.  Returns a new stream."
   [pred s]
-  (let [^Predicate pred (if (instance? Predicate pred)
-                          pred
-                          (reify Predicate
-                            (test [this v] (boolean (pred v)))))]
+  (cond
+    (number? s)
+    (if (pred s)
+      s
+      '())
+    (or (nil? (seq s)))
+    '()
+    :else
+    (let [^Predicate pred (if (instance? Predicate pred)
+                            pred
+                            (reify Predicate
+                              (test [this v] (boolean (pred v)))))]
+      (reify
+        ITypedReduce
+        (reduce [this rfn acc]
+          (reduce (fn [acc v]
+                    (if (.test pred v)
+                      (rfn acc v)
+                      acc))
+                  acc s))
+        Iterable
+        (iterator [this]
+          (doto (FilterIter. (iter s) pred nil true)
+            (.next)))
+        IFnDef$O
+        (invoke [this]
+          (.next (iter this)))))))
+
+
+(defn- map-args->iter-create
+  [argseq]
+  (let [argseq (into [] (comp cat (clojure.core/map iter))
+                     argseq)
+        next-data (object-array (count argseq))]
+    (fn []
+      (when
+          (reduce (hamf/indexed-accum
+                   acc idx v
+                   (let [^Iterator v v]
+                     (if (and acc (.hasNext v))
+                       (do (aset next-data idx (.next v))
+                           true)
+                       false)))
+                  true
+                  argseq)
+        next-data))))
+
+(defn- map-n
+  [mapfn argseq]
+  (let [update-create #(map-args->iter-create argseq)]
     (reify
       ITypedReduce
       (reduce [this rfn acc]
-        (reduce (fn [acc v]
-                  (if (.test pred v)
-                    (rfn acc v)
-                    acc))
-                acc s))
-      Limited
-      (limit [this] (streams-p/limit s))
+        (let [updater (update-create)]
+          (loop [acc acc
+                 next-args (updater)]
+            (if (and next-args (not (reduced? acc)))
+              (recur (rfn acc (mapfn next-args))
+                     (updater))
+              (if (reduced? acc)
+                (deref acc)
+                acc)))))
+      Iterable
+      (iterator [this]
+        (let [updater (update-create)
+              next-args* (volatile! (updater))]
+          (reify Iterator
+            (hasNext [i] (boolean @next-args*))
+            (next [i]
+              (let [v (mapfn @next-args*)]
+                (vreset! next-args* (updater))
+                v)))))
       IFnDef$O
       (invoke [this]
-        (loop []
-          (let [v (s)]
-            (if (.test pred v)
-              v
-              (recur))))))))
-
-
-(defn- supplier-value-seq
-  ^ISeq [supplier-vec]
-  (let [^ISeq sv (seq supplier-vec)]
-    (reify ISeq
-      (first [this] ((.first sv)))
-      (next [this] (when-let [nn (.next sv)]
-                     (supplier-value-seq nn)))
-      (more [this] (when-let [nn (.more sv)]
-                     (supplier-value-seq nn)))
-      (seq [this] this)
-      (cons [this o]
-        (supplier-value-seq (cons o supplier-vec))))))
-
-(defn- map-n
-  [mapfn a b c args]
-  (let [argseq [[a b c] args]
-        args (-> (into [] (comp cat (clojure.core/map to-supplier))
-                       argseq)
-                 (supplier-value-seq))]
-    (stream (transduce (comp cat (clojure.core/map streams-p/limit)) nil-min argseq)
-            (.applyTo ^clojure.lang.IFn mapfn args))))
+        (when-let [fn-args ((update-create))]
+          (mapfn fn-args)))
+      IDeref
+      (deref [this] (.invoke this)))))
 
 (defn map
   "Map a function onto one or more streams.  Returns a new stream whose limit is the least
   of any of the streams."
   ([mapfn s]
-   (if (number? s)
+   (cond
+     (number? s)
      (mapfn s)
+     (nil? (seq s)) '()
+     :else
      (reify
        ITypedReduce
        (reduce [this rfn acc]
          (reduce (fn [acc v]
                    (rfn acc (mapfn v)))
                  acc s))
-       Limited
-       (limit [this] (streams-p/limit s))
+       Iterable
+       (iterator [this]
+         (let [src-iter (iter s)]
+           (reify Iterator
+             (hasNext [this] (.hasNext src-iter))
+             (next [this] (mapfn (.next src-iter))))))
        IFnDef$O
-       (invoke [this] (mapfn (s))))))
+       (invoke [this]
+         (mapfn (.next (iter s)))))))
   ([mapfn a b]
-   (if (or (number? a) (number? b))
+   (cond (or (number? a) (number? b))
      (cond
        (and (number? a) (number? b))
        (mapfn a b)
@@ -234,29 +350,28 @@ user> (streams/sample 20 (streams/+ (streams/uniform-stream)
        (map (fn [bb] (mapfn a bb)) b)
        :else
        (map (fn [aa] (mapfn aa b)) a))
-     (stream (nil-min (streams-p/limit a) (streams-p/limit b))
-             (mapfn (a) (b)))))
+     (and (nil? (seq a)) (nil? (seq b)))
+     '()
+     :else
+     (map-n #(mapfn (aget ^objects % 0) (aget ^objects % 1)) [[a b]])))
   ([mapfn a b c]
    (if (and (number? a) (number? b) (number? c))
      (mapfn a b c)
-     (let [a (to-supplier a)
-           b (to-supplier b)
-           c (to-supplier c)]
-       (stream (nil-min (streams-p/limit a)
-                        (nil-min (streams-p/limit b)
-                                 (streams-p/limit c)))
-               (mapfn (a) (b) (c))))))
+     (map-n #(mapfn (aget ^objects % 0) (aget ^objects % 1) (aget ^objects % 2))
+            [[a b c]])))
   ([mapfn a b c & args]
-   (map-n mapfn a b c args)))
+   (map-n #(.applyTo ^IFn mapfn (ArraySeq/create ^objects %))
+          [[a b c] args])))
 
 
 (defmacro def-double-op
   "Define a unary and binary double from clojure.core or another library such as +.
   Operation must have 1,2,+ arities."
   [op-sym]
-  (let [core-sym (if (namespace op-sym)
-                   op-sym
-                   (symbol (str "clojure.core/" (name op-sym))))
+  (let [core-sym (with-meta (if (namespace op-sym)
+                              op-sym
+                              (symbol (str "clojure.core/" (name op-sym))))
+                   {:tag 'clojure.lang.IFn})
         op-sym (symbol (name op-sym))]
     ;;typehinting these to produce the ideal functions signatures
     `(let [un-arg# (fn ^double [^double v#] (~core-sym v#))
@@ -268,7 +383,8 @@ may be streams or double scalars." (name op-sym))
          ([~'a] (map un-arg# ~'a))
          ([~'a ~'b] (map bi-arg# ~'a ~'b))
          ([~'a ~'b ~'c] (map tri-arg# ~'a ~'b ~'c))
-         ([~'a ~'b ~'c & ~'args] (map-n ~core-sym ~'a ~'b ~'c ~'args))))))
+         ([~'a ~'b ~'c & ~'args] (map-n #(.applyTo ~core-sym (ArraySeq/create %))
+                                        [[~'a ~'b ~'c] ~'args]))))))
 
 
 (def-double-op +)
@@ -276,7 +392,8 @@ may be streams or double scalars." (name op-sym))
 (def-double-op /)
 (def-double-op -)
 
-(defmacro def-binary-op
+
+(defmacro def-double-binary-op
   "Define a unary and binary double from clojure.core or another library such as +.
   Operation need only have single arity of 2."
   ([op-sym docstr]
@@ -290,14 +407,14 @@ may be streams or double scalars." (name op-sym))
           ~docstr
           ([~'a ~'b] (map bi-arg# ~'a ~'b))))))
   ([op-sym]
-   `(def-binary-op ~op-sym ~(format "Binary operation %s.  Operates in the space of doubles. Arguments
+   `(def-double-binary-op ~op-sym ~(format "Binary operation %s.  Operates in the space of doubles. Arguments
 may be streams or double scalars." (name op-sym)))))
 
 
-(def-binary-op fastmath.core/fpow "Fast pow where right-hand-side is interpreted as integer values.")
+(def-double-binary-op fastmath.core/fpow "Fast pow where right-hand-side is interpreted as integer values.")
 
 
-(defmacro def-unary-op
+(defmacro def-double-unary-op
   "Define a unary and binary double from clojure.core or another library such as +.
   Operation need only have single arity of 2."
   ([op-sym docstr]
@@ -311,7 +428,7 @@ may be streams or double scalars." (name op-sym)))))
           ~docstr
           ([~'a] (map un-arg# ~'a))))))
   ([op-sym]
-   `(def-unary-op ~op-sym ~(format "Unary operation %s.  Operates in the space of doubles. Argument may be a streams or a double." (name op-sym)))))
+   `(def-double-unary-op ~op-sym ~(format "Unary operation %s.  Operates in the space of doubles. Argument may be a streams or a double." (name op-sym)))))
 
 
-(def-unary-op fastmath.core/log1p)
+(def-double-unary-op fastmath.core/log1p)
