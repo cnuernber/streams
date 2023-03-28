@@ -1,8 +1,8 @@
 # Streams
 
 
-Simple programmatic model for infinite creating streams of primitive
-doubles and doing arithmetic operations on them.  Provides basic structure for
+Simple programmatic model for infinite streams of numbers or objects primitive
+and doing arithmetic operations (in double space) on them.  Provides basic structure for
 monte-carlo simulations.
 
 Use fastmath/random for distributions and the transducers in kixi.stats.core for
