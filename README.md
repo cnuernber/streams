@@ -1,9 +1,11 @@
 # Streams
 
 
-Simple programmatic model for infinite creating streams of primitive
-doubles and doing arithmetic operations on them.  Provides basic structure for
+Simple programmatic model for infinite streams of numbers or objects primitive
+and doing arithmetic operations (in double space) on them.  Provides basic structure for
 monte-carlo simulations.
+
+Streams are an interesting concept as they are lazy noncaching and also not indexable.
 
 Use fastmath/random for distributions and the transducers in kixi.stats.core for
 basic stats.
@@ -56,7 +58,8 @@ user> (->> (streams/+ s 10)
  :variance 0.9878880582367155,
  :max 13.446008078878219,
  :mean 9.997547011946645}
-
+user> (require '[fastmath.random :as fast-r])
+nil
 user> (fast-r/distribution :exponential)
 #object[org.apache.commons.math3.distribution.ExponentialDistribution 0x3dd142f6 "org.apache.commons.math3.distribution.ExponentialDistribution@3dd142f6"]
 user> (def exp-d (fast-r/distribution :exponential))
