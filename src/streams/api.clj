@@ -34,7 +34,9 @@ user> (streams/sample 20 (streams/+ (streams/uniform-stream)
   (:import [ham_fisted Transformables ITypedReduce Casts IFnDef IFnDef$O Reductions]
            [java.util.function Supplier Predicate]
            [java.util Random Iterator NoSuchElementException Map]
-           [clojure.lang IDeref IFn ISeq ArraySeq Sequential])
+           [clojure.lang IDeref IFn ISeq ArraySeq Sequential]
+           [org.apache.commons.math3.random RandomGenerator]
+           [org.apache.commons.math3.distribution RealDistribution IntegerDistribution])
   (:refer-clojure :exclude [take filter map interleave + - / *]))
 
 
@@ -71,6 +73,7 @@ user> (streams/sample 20 (streams/+ (streams/uniform-stream)
 
 
 (defmacro stream
+  "Create a 'stream' - the lazy noncaching form of repeatedly."
   ([code]
    `(stream nil ~code))
   ([l code]
@@ -114,31 +117,98 @@ user> (streams/sample 20 (streams/+ (streams/uniform-stream)
           (deref [this#] (.invoke this#)))))))
 
 
+(defn- rng-sample-fn
+  [rng type]
+  (cond
+    (instance? RandomGenerator rng)
+    (case type
+      :uniform (fn uniform-generator ^double []
+                 (.nextDouble ^RandomGenerator rng))
+      :gaussian (fn gaussian-generator ^double []
+                  (.nextGaussian ^RandomGenerator rng)))
+    (instance? Random rng)
+    (case type
+      :uniform (fn uniform-random ^double []
+                 (.nextDouble ^Random rng))
+      :gaussian (fn gaussian-random ^double []
+                  (.nextGaussian ^Random rng)))
+    :else
+    (case type
+      :uniform fast-p/drandom
+      :gaussian fast-p/grandom)))
+
+
+(defn- opts->rng
+  [opts]
+  (if-let [rng (get opts :rng)]
+    rng
+    (let [^Random rng
+          (if-let [seed (get opts :seed)]
+            (Random. (int seed))
+            (Random.))]
+      #(.nextDouble rng))))
+
+(defn- opts->sampler
+  "Return a random sampler from options."
+  [opts type]
+  (->
+   (cond
+     (instance? Random opts)
+     opts
+     (instance? RandomGenerator opts)
+     opts
+     (fn? opts)
+     opts
+     :else
+     (if-let [rng (:rng opts)]
+       (if (keyword? rng)
+         (fast-r/rng rng)
+         rng)
+       (if-let [seed (:seed opts)]
+         (Random. (int seed))
+         (fast-r/rng :mersenne))))
+   (rng-sample-fn type)))
+
+
 (defn uniform-stream
   "Create a uniform stream with values [0-1]"
-  ([n ^Random r]
-   (stream n (.nextDouble r)))
+  ([n opts]
+   (let [sfn (opts->sampler opts :uniform)]
+     (stream n (sfn))))
   ([n]
-   (uniform-stream n (Random.)))
+   (uniform-stream n nil))
   ([]
-   (uniform-stream nil (Random.))))
+   (uniform-stream nil nil)))
 
 
 (defn gaussian-stream
   "Create a gaussian stream with mean 0 variance 1"
-  ([n ^Random r]
-   (stream n (.nextGaussian r)))
+  ([n opts]
+   (let [sfn (opts->sampler opts :gaussian)]
+     (stream n (sfn))))
   ([n]
-   (gaussian-stream n (Random.)))
+   (gaussian-stream n nil))
   ([]
-   (gaussian-stream nil (Random.))))
+   (gaussian-stream nil nil)))
+
+
+(defn- distribution-sampler
+  [dist]
+  (cond
+    (instance? RealDistribution dist)
+    (fn real-sampler ^double []
+      (.sample ^RealDistribution dist))
+    (instance? IntegerDistribution dist)
+    (fn integer-sampler ^long []
+      (.sample ^IntegerDistribution dist))
+    :else fast-p/sample))
 
 
 (defn fastmath-stream
   "Create a stream based on a
   [fastmath distribution](https://generateme.github.io/fastmath/fastmath.random.html#var-distribution)."
-  ([n key opts] (let [dist (fast-r/distribution key opts)]
-              (stream n (fast-p/sample dist))))
+  ([n key opts] (let [dist (distribution-sampler (fast-r/distribution key opts))]
+              (stream n (dist))))
   ([key opts] (fastmath-stream nil key opts))
   ([key] (fastmath-stream nil key nil)))
 
@@ -474,16 +544,6 @@ user> (streams/sample 20 (streams/+ (streams/uniform-stream)
       (set! next-value (if has-next (.next iter) nil))
       v)))
 
-(defn- opts->rng
-  [opts]
-  (if-let [rng (get opts :rng)]
-    rng
-    (let [^Random rng
-          (if-let [seed (get opts :seed)]
-            (Random. (int seed))
-            (Random.))]
-      #(.nextDouble rng))))
-
 (defn prob-interleave
   "Probabilistically interleave multiple streams.  Each argument must be a tuple
   of [stream prob] and probabilities will be used with a flat distribution to decide
@@ -524,7 +584,7 @@ a stream and the second member a number.")))
                         acc))
                      0.0
                      probs)
-           rng (opts->rng opts)]
+           rng (opts->sampler opts :uniform)]
        (reify
          Sequential
          ITypedReduce
