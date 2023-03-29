@@ -43,7 +43,7 @@ Basic nongraphing dependencies:
 
 ```clojure
 com.cnuernber/streams {:git/url "https://github.com/cnuernber/streams/"
-                       :sha "0925d59e082355f0282e524779d0e226973bfde5"}
+                       :sha "2f2a938f74dd810b77f236803dc8c0b3708541ef"}
 ```
 
 See graphs namespace api docs for graphing dependencies - and off we go...
