@@ -148,7 +148,7 @@ user> (streams/sample 20 (streams/+ (streams/uniform-stream)
             (Random.))]
       #(.nextDouble rng))))
 
-(defn- opts->sampler
+(defn ^:no-doc opts->sampler
   "Return a random sampler from options."
   [opts type]
   (->
