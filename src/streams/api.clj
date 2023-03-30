@@ -345,21 +345,31 @@ user> (streams/sample 20 (streams/+ (streams/uniform-stream)
 
 (defn- map-args->iter-create
   [argseq]
-  (let [argseq (into [] (comp cat (clojure.core/map iter))
-                     argseq)
-        next-data (object-array (count argseq))]
-    (fn []
-      (when
-          (reduce (hamf/indexed-accum
-                   acc idx v
-                   (let [^Iterator v v]
-                     (if (and acc (.hasNext v))
-                       (do (aset next-data idx (.next v))
-                           true)
-                       false)))
-                  true
-                  argseq)
-        next-data))))
+  (let [argseq (object-array
+                (into [] (comp cat (clojure.core/map iter))
+                      argseq))
+        nargs (alength argseq)
+        next-data (object-array nargs)]
+    ;;Special case nargs for faster iteration of common case
+    (if (== nargs 2)
+      (fn map-loop-dual-iter []
+        (let [^Iterator i0 (aget argseq 0)
+              ^Iterator i1 (aget argseq 1)]
+          (when (and (.hasNext i0) (.hasNext i1))
+            (aset next-data 0 (.next i0))
+            (aset next-data 1 (.next i1))
+            next-data)))
+      (fn map-loop-iter []
+        (when (loop [idx 0
+                     acc true]
+                (if (and acc (< idx nargs))
+                  (let [^Iterator v (aget argseq idx)
+                        acc (.hasNext v)]
+                    (when acc
+                      (aset next-data idx (.next v)))
+                    (recur (unchecked-inc idx) acc))
+                  acc))
+          next-data)))))
 
 (defn- map-n
   [mapfn argseq]
@@ -620,8 +630,17 @@ may be streams or double scalars." (name op-sym))
          ([~'a] (map un-arg# ~'a))
          ([~'a ~'b] (map bi-arg# ~'a ~'b))
          ([~'a ~'b ~'c] (map tri-arg# ~'a ~'b ~'c))
-         ([~'a ~'b ~'c & ~'args] (map-n #(.applyTo ~core-sym (ArraySeq/create %))
-                                        [[~'a ~'b ~'c] ~'args]))))))
+         ([~'a ~'b ~'c & ~'args]
+          (map-n (fn [~(with-meta 'args {:tag 'objects})]
+                   (let [len# (alength ~'args)]
+                     (loop [acc# (~core-sym (double (aget ~'args 0))
+                                  (double (aget ~'args 1)))
+                            idx# 2]
+                       (if (< idx# len#)
+                         (recur (~core-sym acc# (double (aget ~'args idx#)))
+                                (unchecked-inc idx#))
+                         acc#))))
+                 [[~'a ~'b ~'c] ~'args]))))))
 
 
 (def-double-op +)

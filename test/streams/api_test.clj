@@ -16,7 +16,15 @@
                     (->> (streams/* (streams/uniform-stream) 2.0)
                          (streams/+ (streams/uniform-stream))
                          (streams/take 10000)))
-               0.1)))
+               0.1))
+  (is (roughly 2.5
+               (hamf/mean
+                (streams/take
+                 10000
+                 (streams/+ (streams/uniform-stream)
+                            (streams/* (streams/uniform-stream) 2.0)
+                            (streams/uniform-stream)
+                            (streams/uniform-stream)))))))
 
 
 (deftest filter-test
