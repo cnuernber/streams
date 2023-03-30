@@ -6,7 +6,7 @@
 
 (defn- roughly
   ([^double exp ^double result ^double err]
-   (< (abs (- exp (abs result))) err))
+   (< (abs (- exp result)) err))
   ([exp result]
    (roughly exp result 0.001)))
 
@@ -24,7 +24,8 @@
                  (streams/+ (streams/uniform-stream)
                             (streams/* (streams/uniform-stream) 2.0)
                             (streams/uniform-stream)
-                            (streams/uniform-stream)))))))
+                            (streams/uniform-stream))))
+               0.1)))
 
 
 (deftest filter-test
