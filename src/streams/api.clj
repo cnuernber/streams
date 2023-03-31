@@ -34,7 +34,7 @@ user> (streams/sample 20 (streams/+ (streams/uniform-stream)
   (:import [ham_fisted Transformables ITypedReduce Casts IFnDef IFnDef$O Reductions]
            [java.util.function Supplier Predicate]
            [java.util Random Iterator NoSuchElementException Map]
-           [clojure.lang IDeref IFn ISeq ArraySeq Sequential]
+           [clojure.lang IDeref IFn ISeq ArraySeq Sequential Counted]
            [org.apache.commons.math3.random RandomGenerator]
            [org.apache.commons.math3.distribution RealDistribution IntegerDistribution])
   (:refer-clojure :exclude [take filter map interleave + - / *]))
@@ -92,6 +92,8 @@ user> (streams/sample 20 (streams/+ (streams/uniform-stream)
                   (if (reduced? acc#)
                     (deref acc#)
                     acc#))))
+            Counted
+            (count [this] l#)
             Iterable
             (iterator [this#] (CountingIter. l# this#))
             IFnDef$O
