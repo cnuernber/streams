@@ -151,8 +151,18 @@ benchmark code is [perftest.clj](dev/src/perftest.clj), the script
 in [scripts/benchmark](scripts/benchmark) and the results are 
 checked into [docs](docs/m1-mac-benchmark.data).  Here is a synopsis - 
 Default clojure pathways are 6x slower roughly than either streams or dtype-next
-when there is no composition and -> 40x+ times slower when we perform a complex
+when there is no composition and -> 23x+ times slower when we perform a complex
 (4 arity) summation.
+
+I want to stress that this is an unavoidable result if we commit to lazy caching vs.
+lazy noncaching computational models and *not* a result of implementation details in
+Clojure's core libraries -- in fact the chunking system introduced into Clojure's compute
+model makes the lazy caching pathway significantly more efficient.
+
+Lazy caching is a much more forgiving computational model - but it eliminates several crucial,
+important optimization opportunities.  As stated earlier in the ready lazy noncaching sequences 
+can be as efficient as lazy noncaching random access models if we avoid limiting the streams
+and can compute with infinite streams.
 
 #### Basic Reduction 
 
