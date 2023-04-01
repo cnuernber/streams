@@ -137,6 +137,57 @@ user> (streams/sample 20 (streams/+ (streams/uniform-stream)
           (deref [this#] (.invoke this#)))))))
 
 
+(deftype ^:private BatchStream [batch-fn
+                                ^:unsynchronized-mutable last-batch
+                                ^{:unsynchronized-mutable true
+                                  :tag long} n-elems
+                                ^{:unsynchronized-mutable true
+                                  :tag long} idx]
+  Sequential
+  ITypedReduce
+  (reduce [this rfn acc]
+    (loop [ne n-elems
+           ix idx
+           data last-batch
+           acc acc]
+      (if (reduced? acc)
+        (do
+          (set! n-elems ne)
+          (set! idx ix)
+          (set! last-batch data)
+          (deref acc))
+        (let [rset? (== ix ne)
+              ix (long (if rset? 0 ix))
+              data (if rset? (batch-fn) data)
+              ne (long (if rset? (count data) ne))]
+          (recur ne (unchecked-inc ix) data (rfn acc (data ix)))))))
+  Limited
+  (has-limit? [this] false)
+  Iterable
+  (iterator [this]
+    (reify Iterator
+      (hasNext [i] true)
+      (next [i] (.invoke this))))
+  IFnDef$O
+  (invoke [this]
+    (when (== idx n-elems)
+      (let [nb (batch-fn)
+            ne (long (count nb))]
+        (set! last-batch nb)
+        (set! idx 0)
+        (set! n-elems ne)))
+    (let [rv (last-batch idx)]
+      (set! idx (unchecked-inc idx))
+      rv)))
+
+
+(defn batch-stream
+  "Given a function that returns a batch of data - which needs to look like a function
+  from index to value - make a stream that reads the values of the batches."
+  [batch-fn]
+  (BatchStream. batch-fn nil 0 0))
+
+
 (defn limited?
   "Returns true if the stream has a limit"
   [s]
@@ -247,8 +298,8 @@ user> (streams/sample 20 (streams/+ (streams/uniform-stream)
 
 
 (deftype ^:private TakeNReducer [^{:unsynchronized-mutable true
-                         :tag long} n
-                       rfn]
+                                   :tag long} n
+                                 rfn]
   IFnDef
   (invoke [this acc v]
     (let [acc (rfn acc v)

@@ -20,7 +20,8 @@
                  :sha "abd480cc382b7ae143f7902ee9d300cdc1a705cc"
                  :exclusions [org.graalvm.js/js org.graalvm.js/js-scriptengine]}
                 org.graalvm.js/js {:mvn/version "20.3.2"}
-                org.graalvm.js/js-scriptengine {:mvn/version "20.3.2"}}}
+                org.graalvm.js/js-scriptengine {:mvn/version "20.3.2"}
+                com.cnuernber/mkl {:mvn/version "1.000-beta-2"}}}
   :test
   {:extra-deps {com.cognitect/test-runner
                 {:git/url "https://github.com/cognitect-labs/test-runner"

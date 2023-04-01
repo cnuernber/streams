@@ -2,11 +2,27 @@
   (:require [streams.api :as streams]
             [tech.v3.datatype :as dt]
             [tech.v3.datatype.functional :as dfn]
+            [mkl.api :as mkl]
+            [tech.v3.resource :as resource]
             [criterium.core :as crit])
   (:import [ham_fisted Reductions]
            [tech.v3.datatype DoubleReader]
            [clojure.lang IReduceInit])
   (:gen-class))
+
+(defn mkl-uniform-gen
+  []
+  (println "benchmark mkl uniform generation")
+  (mkl/initialize!)
+  (resource/stack-resource-context
+   (let [sampler (streams/opts->sampler nil :gaussian)
+         batch-gen (streams/batch-stream (mkl/rng-stream 2048 {:dist :gaussian :a 0.0 :sigma 1.0}))]
+     (println "jvm generation")
+     (crit/quick-bench (dotimes [idx 100000]
+                         (sampler)))
+     (println "mkl generation")
+     (crit/quick-bench (dotimes [idx 100000]
+                         (batch-gen))))))
 
 
 (defn -main
