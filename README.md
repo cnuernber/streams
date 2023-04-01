@@ -159,13 +159,15 @@ when there is no composition and -> 40x+ times slower when we perform a complex
 The basic reduction tests creates 10000 uniform doubles in a reduce call.  For the efficient systems,
 this is timing how expensive your random number generator is per-call.
 
-| system | performance | 
-| ------ | ----------+ |
-| clj | 300 µs |
-| stream | 64.241910 µs |
-| dtype | 59.200689 µs |
-| java typed | 56.765409 µs |
+
+| system       | performance  |
+| ---          | ---:         |
+| clj          | 300 µs       |
+| stream       | 64.241910 µs |
+| dtype        | 59.200689 µs |
+| java typed   | 56.765409 µs |
 | java untyped | 56.077244 µs |
+
 
 
 #### Summation Reduction
@@ -173,9 +175,10 @@ this is timing how expensive your random number generator is per-call.
 The summation reduction test is meant to test nontrivial composition - sum 4 streams together.
 
 
-| system | performance  |
-| ------ | -----------+ |
-| clj | 6.530224 ms     |
+
+| system | performance   |
+| ------ | -----------:  |
+| clj    | 6.530224 ms   |
 | stream | 280.429330 µs |
-| dtype | 278.655565 µs |
+| dtype  | 278.655565 µs |
 | inline | 229.377059 µs |
