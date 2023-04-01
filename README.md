@@ -5,9 +5,20 @@ Simple programmatic model for infinite streams of numbers or objects primitive
 and doing arithmetic operations (in double space) on them.  Provides basic structure for
 monte-carlo simulations.
 
-Streams are an interesting concept as they are lazy noncaching and also not indexable.
+Streams are an interesting concept as they are lazy noncaching and also not indexable.  If we 
+combine lazy-noncaching with infinite or unlimited streams we get an extremely efficient
+compositional model as we don't need iterators in the composition -- there is no need to
+check `hasNext`.  We can simply get the next item - throughout this library the things returned
+implement this efficiently in the unlimited case in the 0-arg IFn implementation so you can
+just call them with no arguments.
 
-Use fastmath/random for distributions and the transducers in kixi.stats.core for
+When we stick to unlimited streams we get as efficient a compositional model as dtype-next's with
+a simpler definition and composition rules and *without* needing to type the data.  Both 
+dtype-next's compositional model and this library's compositional model are far faster 
+as the compositions get more complex than either clojure's default lazy caching sequences or
+the transducer model which is lazy caching but limited.
+
+Exmaples use fastmath/random for distributions and the transducers in kixi.stats.core for
 basic stats.
 
 
@@ -131,4 +142,40 @@ user> (->> (streams/fastmath-stream :exponential)
  :variance 1.970266932907259,
  :max 18.57889358544537,
  :mean 10.982617281509123}
- ```
+```
+ 
+# Lies, Damn Lies, And Benchmarks!
+ 
+I benchmarked this library on my m1-mac with the brew-installed jdk-19.  The
+benchmark code is [perftest.clj](dev/src/perftest.clj), the script 
+in [scripts/benchmark](scripts/benchmark) and the results are 
+checked into [docs](docs/m1-mac-benchmark.data).  Here is a synopsis - 
+Default clojure pathways are 6x slower roughly than either streams or dtype-next
+when there is no composition and -> 40x+ times slower when we perform a complex
+(4 arity) summation.
+
+#### Basic Reduction 
+
+The basic reduction tests creates 10000 uniform doubles in a reduce call.  For the efficient systems,
+this is timing how expensive your random number generator is per-call.
+
+| system | performance | 
+| ------ | ----------+ |
+| clj | 300 µs |
+| stream | 64.241910 µs |
+| dtype | 59.200689 µs |
+| java typed | 56.765409 µs |
+| java untyped | 56.077244 µs |
+
+
+#### Summation Reduction
+
+The summation reduction test is meant to test nontrivial composition - sum 4 streams together.
+
+
+| system | performance  |
+| ------ | -----------+ |
+| clj | 6.530224 ms     |
+| stream | 280.429330 µs |
+| dtype | 278.655565 µs |
+| inline | 229.377059 µs |
