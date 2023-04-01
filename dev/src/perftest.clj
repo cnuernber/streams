@@ -16,9 +16,9 @@
         rfn (fn [acc ^double v] v)]
     (println "stream sample reduction")
     (println "pure clj")
-    (crit/quick-bench (.reduce ^IReduceInit (repeatedly 10000 (sampler))
-                               rfn
-                               nil))
+    (crit/quick-bench (reduce rfn
+                              nil
+                              (repeatedly 10000 (sampler))))
 
     (println "stream reduce")
     (crit/quick-bench (.reduce ^IReduceInit (streams/stream 10000 (sampler))
