@@ -14,6 +14,11 @@
   (let [sampler (streams/opts->sampler nil :uniform)
         idxsampler (fn ^double [^long idx] (sampler))
         rfn (fn [acc ^double v] v)]
+    (println "stream sample reduction")
+    (println "pure clj")
+    (crit/quick-bench (.reduce ^IReduceInit (repeatedly 10000 (sampler))
+                               rfn
+                               nil))
 
     (println "stream reduce")
     (crit/quick-bench (.reduce ^IReduceInit (streams/stream 10000 (sampler))
@@ -25,20 +30,15 @@
                                rfn
                                nil))
 
-    (println "dtype make-reader-fn reduce")
-    (crit/quick-bench (.reduce ^IReduceInit (dt/make-reader-fn :float64 :float64 10000 idxsampler)
-                               rfn
-                               nil))
-
     (println "double buffer custom reduce")
     (crit/quick-bench (Reductions/doubleSamplerReduction rfn nil idxsampler 10000))
     (println "untyped sampler reduction")
     (crit/quick-bench (Reductions/samplerReduction rfn nil idxsampler 10000))
 
-    (println "stream summation reduction")
     (let [s (streams/stream (sampler))
           rdr (dt/make-reader-fn :float64 :float64 10000 idxsampler)
           rs (repeatedly rand)]
+      (println "stream summation reduction")
       (println "pure clj example")
       (crit/quick-bench (double-array (take 10000 (map + rs rs rs rs))))
       (println "stream summation")
