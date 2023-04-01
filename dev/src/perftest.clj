@@ -18,7 +18,7 @@
     (println "pure clj")
     (crit/quick-bench (reduce rfn
                               nil
-                              (repeatedly 10000 (sampler))))
+                              (repeatedly 10000 sampler)))
 
     (println "stream reduce")
     (crit/quick-bench (.reduce ^IReduceInit (streams/stream 10000 (sampler))

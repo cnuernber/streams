@@ -1,0 +1,77 @@
+Building uberjar
+SLF4J: Failed to load class "org.slf4j.impl.StaticLoggerBinder".
+SLF4J: Defaulting to no-operation (NOP) logger implementation
+SLF4J: See http://www.slf4j.org/codes.html#StaticLoggerBinder for further details.
+SLF4J: Failed to load class "org.slf4j.impl.StaticLoggerBinder".
+SLF4J: Defaulting to no-operation (NOP) logger implementation
+SLF4J: See http://www.slf4j.org/codes.html#StaticLoggerBinder for further details.
+stream sample reduction
+pure clj
+Evaluation count : 1506 in 6 samples of 251 calls.
+             Execution time mean : 399.217036 µs
+    Execution time std-deviation : 2.623462 µs
+   Execution time lower quantile : 395.639845 µs ( 2.5%)
+   Execution time upper quantile : 401.734466 µs (97.5%)
+                   Overhead used : 1.092731 ns
+stream reduce
+Evaluation count : 9426 in 6 samples of 1571 calls.
+             Execution time mean : 64.241910 µs
+    Execution time std-deviation : 683.610149 ns
+   Execution time lower quantile : 63.290760 µs ( 2.5%)
+   Execution time upper quantile : 65.040787 µs (97.5%)
+                   Overhead used : 1.092731 ns
+dtype reduce
+Evaluation count : 10398 in 6 samples of 1733 calls.
+             Execution time mean : 59.200689 µs
+    Execution time std-deviation : 503.609165 ns
+   Execution time lower quantile : 58.583395 µs ( 2.5%)
+   Execution time upper quantile : 59.723293 µs (97.5%)
+                   Overhead used : 1.092731 ns
+double buffer custom reduce
+Evaluation count : 10620 in 6 samples of 1770 calls.
+             Execution time mean : 56.765409 µs
+    Execution time std-deviation : 421.282016 ns
+   Execution time lower quantile : 56.119152 µs ( 2.5%)
+   Execution time upper quantile : 57.173080 µs (97.5%)
+                   Overhead used : 1.092731 ns
+untyped sampler reduction
+Evaluation count : 10908 in 6 samples of 1818 calls.
+             Execution time mean : 56.077244 µs
+    Execution time std-deviation : 302.469786 ns
+   Execution time lower quantile : 55.639149 µs ( 2.5%)
+   Execution time upper quantile : 56.359620 µs (97.5%)
+                   Overhead used : 1.092731 ns
+stream summation reduction
+pure clj example
+Evaluation count : 90 in 6 samples of 15 calls.
+             Execution time mean : 6.530224 ms
+    Execution time std-deviation : 47.001505 µs
+   Execution time lower quantile : 6.475427 ms ( 2.5%)
+   Execution time upper quantile : 6.591742 ms (97.5%)
+                   Overhead used : 1.092731 ns
+stream summation
+Evaluation count : 2166 in 6 samples of 361 calls.
+             Execution time mean : 280.429330 µs
+    Execution time std-deviation : 887.028753 ns
+   Execution time lower quantile : 279.018532 µs ( 2.5%)
+   Execution time upper quantile : 281.425863 µs (97.5%)
+                   Overhead used : 1.092731 ns
+dtype summation
+Evaluation count : 2202 in 6 samples of 367 calls.
+             Execution time mean : 278.655565 µs
+    Execution time std-deviation : 1.110906 µs
+   Execution time lower quantile : 277.107785 µs ( 2.5%)
+   Execution time upper quantile : 279.636028 µs (97.5%)
+                   Overhead used : 1.092731 ns
+inline stream summation
+Evaluation count : 2646 in 6 samples of 441 calls.
+             Execution time mean : 229.377059 µs
+    Execution time std-deviation : 2.264863 µs
+   Execution time lower quantile : 227.436268 µs ( 2.5%)
+   Execution time upper quantile : 232.942172 µs (97.5%)
+                   Overhead used : 1.092731 ns
+
+Found 1 outliers in 6 samples (16.6667 %)
+	low-severe	 1 (16.6667 %)
+ Variance from outliers : 13.8889 % Variance is moderately inflated by outliers
+done
