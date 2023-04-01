@@ -37,7 +37,10 @@
 
     (println "stream summation reduction")
     (let [s (streams/stream (sampler))
-          rdr (dt/make-reader-fn :float64 :float64 10000 idxsampler)]
+          rdr (dt/make-reader-fn :float64 :float64 10000 idxsampler)
+          rs (repeatedly rand)]
+      (println "pure clj example")
+      (crit/quick-bench (double-array (take 10000 (map + rs rs rs rs))))
       (println "stream summation")
       (crit/quick-bench (streams/sample (streams/take 10000
                                                       (streams/+ s s s s))))

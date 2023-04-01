@@ -25,15 +25,29 @@ user> (streams/sample 20 (streams/+ (streams/uniform-stream)
  0.26506472311487705, 2.538111046716471, 2.9001166286861992, 1.3705779064113792,
  2.1755184584145306, 1.3351040137971486, 1.6120692556203424, 1.6107428912151116,
  2.2510286054117365, 0.8765206662618311, 1.213693353303307, 1.2334256767045018]
+```
+
+  For best performance keep streams unlimited until the very end.  This keeps intermediate streams from needing to check
+  if their sub-streams have in fact ended for every item:
+
+```clojure
+  (streams/take 10000 (steams/+ a b))
+```
+  Performs better than:
+
+```clojure
+  (steams/+ (streams/take 10000 a) b)
 ```"
   (:require [ham-fisted.api :as hamf]
             [ham-fisted.protocols :as hamf-p]
             [ham-fisted.lazy-noncaching :as lznc]
+            [streams.protocols :as streams-p]
             [fastmath.random :as fast-r]
             [fastmath.protocols :as fast-p])
   (:import [ham_fisted Transformables ITypedReduce Casts IFnDef IFnDef$O Reductions]
+           [streams.protocols Limited]
            [java.util.function Supplier Predicate]
-           [java.util Random Iterator NoSuchElementException Map]
+           [java.util Random Iterator NoSuchElementException Map List]
            [clojure.lang IDeref IFn ISeq ArraySeq Sequential Counted]
            [org.apache.commons.math3.random RandomGenerator]
            [org.apache.commons.math3.distribution RealDistribution IntegerDistribution])
@@ -92,6 +106,8 @@ user> (streams/sample 20 (streams/+ (streams/uniform-stream)
                   (if (reduced? acc#)
                     (deref acc#)
                     acc#))))
+            Limited
+            (has-limit? [this] true)
             Counted
             (count [this] l#)
             Iterable
@@ -108,6 +124,8 @@ user> (streams/sample 20 (streams/+ (streams/uniform-stream)
               (if (not (reduced? acc#))
                 (recur (rfn# acc# ~code))
                 (deref acc#))))
+          Limited
+          (has-limit? [this] false)
           Iterable
           (iterator [this#]
             (reify Iterator
@@ -117,6 +135,12 @@ user> (streams/sample 20 (streams/+ (streams/uniform-stream)
           (invoke [this#] ~code)
           IDeref
           (deref [this#] (.invoke this#)))))))
+
+
+(defn limited?
+  "Returns true if the stream has a limit"
+  [s]
+  (streams-p/has-limit? s))
 
 
 (defn- rng-sample-fn
@@ -265,6 +289,8 @@ user> (streams/sample 20 (streams/+ (streams/uniform-stream)
     :else
     (reify
       Sequential
+      Limited
+      (has-limit? [this] true)
       ITypedReduce
       (reduce [this rfn acc]
         (reduce (TakeNReducer. n rfn) acc s))
@@ -336,6 +362,8 @@ user> (streams/sample 20 (streams/+ (streams/uniform-stream)
                       (rfn acc v)
                       acc))
                   acc s))
+        Limited
+        (has-limit? [this] (streams-p/has-limit? s))
         Iterable
         (iterator [this]
           (doto (FilterIter. (iter s) pred nil true)
@@ -346,63 +374,93 @@ user> (streams/sample 20 (streams/+ (streams/uniform-stream)
 
 
 (defn- map-args->iter-create
-  [argseq]
-  (let [argseq (object-array
-                (into [] (comp cat (clojure.core/map iter))
-                      argseq))
-        nargs (alength argseq)
-        next-data (object-array nargs)]
-    ;;Special case nargs for faster iteration of common case
-    (if (== nargs 2)
-      (fn map-loop-dual-iter []
-        (let [^Iterator i0 (aget argseq 0)
-              ^Iterator i1 (aget argseq 1)]
-          (when (and (.hasNext i0) (.hasNext i1))
-            (aset next-data 0 (.next i0))
-            (aset next-data 1 (.next i1))
-            next-data)))
-      (fn map-loop-iter []
-        (when (loop [idx 0
-                     acc true]
-                (if (and acc (< idx nargs))
-                  (let [^Iterator v (aget argseq idx)
-                        acc (.hasNext v)]
-                    (when acc
-                      (aset next-data idx (.next v)))
-                    (recur (unchecked-inc idx) acc))
-                  acc))
-          next-data)))))
+  [argseq limit?]
+  (if limit?
+    (let [argseq (object-array
+                  (into [] (comp cat (clojure.core/map iter))
+                        argseq))
+          nargs (alength argseq)]
+      ;;Special case nargs for faster iteration of common case
+      (fn []
+        (let [next-data (object-array nargs)
+              rval (lznc/->random-access next-data)]
+          (if (== nargs 2)
+            (fn map-loop-dual-iter []
+              (let [^Iterator i0 (aget argseq 0)
+                    ^Iterator i1 (aget argseq 1)]
+                (when (and (.hasNext i0) (.hasNext i1))
+                  (aset next-data 0 (.next i0))
+                  (aset next-data 1 (.next i1))
+                  next-data)))
+            (fn map-loop-iter []
+              (when (loop [idx 0
+                           acc true]
+                      (if (and acc (< idx nargs))
+                        (let [^Iterator v (aget argseq idx)
+                              acc (.hasNext v)]
+                          (when acc
+                            (aset next-data idx (.next v)))
+                          (recur (unchecked-inc idx) acc))
+                        acc))
+                rval))))))
+    (let [argseq (object-array
+                  (into [] (comp cat (clojure.core/map to-supplier))
+                        argseq))
+          nargs (alength argseq)
+          fn-args (reify ham_fisted.IMutList
+                    (size [this] nargs)
+                    (get [this idx] ((aget argseq idx))))]
+      (fn []
+        (fn []
+          fn-args)))))
 
 (defn- map-n
   [mapfn argseq]
-  (let [update-create #(map-args->iter-create argseq)]
+  (let [limit? (boolean (some streams-p/has-limit? (lznc/apply-concat argseq)))
+        update-create (map-args->iter-create argseq limit?)
+        invoker (if limit?
+                  #(when-let [fn-args ((update-create))]
+                     (mapfn fn-args))
+                  (let [fn-args ((update-create))]
+                    #(mapfn fn-args)))]
     (reify
       Sequential
       ITypedReduce
       (reduce [this rfn acc]
         (let [updater (update-create)]
-          (loop [acc acc
-                 next-args (updater)]
-            (if (and next-args (not (reduced? acc)))
-              (recur (rfn acc (mapfn next-args))
-                     (updater))
+          (if limit?
+            (loop [acc acc
+                   next-args (updater)]
+              (if (and next-args (not (reduced? acc)))
+                (recur (rfn acc (mapfn next-args))
+                       (updater))
+                (if (reduced? acc)
+                  (deref acc)
+                  acc)))
+            (loop [acc (rfn acc (mapfn (updater)))]
               (if (reduced? acc)
                 (deref acc)
-                acc)))))
+                (recur (rfn acc (mapfn (updater)))))))))
+      Limited
+      (has-limit? [this] limit?)
       Iterable
       (iterator [this]
-        (let [updater (update-create)
-              next-args* (volatile! (updater))]
-          (reify Iterator
-            (hasNext [i] (boolean @next-args*))
-            (next [i]
-              (let [v (mapfn @next-args*)]
-                (vreset! next-args* (updater))
-                v)))))
+        (if limit?
+          (let [updater (update-create)
+                next-args* (volatile! (updater))]
+            (reify Iterator
+              (hasNext [i] (boolean @next-args*))
+              (next [i]
+                (let [v (mapfn @next-args*)]
+                  (vreset! next-args* (updater))
+                  v))))
+          (let [updater (update-create)]
+            (reify Iterator
+              (hasNext [i] true)
+              (next [i] (mapfn (updater)))))))
       IFnDef$O
       (invoke [this]
-        (when-let [fn-args ((update-create))]
-          (mapfn fn-args)))
+        (invoker))
       IDeref
       (deref [this] (.invoke this)))))
 
@@ -415,22 +473,31 @@ user> (streams/sample 20 (streams/+ (streams/uniform-stream)
      (mapfn s)
      (nil? (seq s)) '()
      :else
-     (reify
-       Sequential
-       ITypedReduce
-       (reduce [this rfn acc]
-         (reduce (fn [acc v]
-                   (rfn acc (mapfn v)))
-                 acc s))
-       Iterable
-       (iterator [this]
-         (let [src-iter (iter s)]
-           (reify Iterator
-             (hasNext [this] (.hasNext src-iter))
-             (next [this] (mapfn (.next src-iter))))))
-       IFnDef$O
-       (invoke [this]
-         (mapfn (.next (iter s)))))))
+     (let [limit? (streams-p/has-limit? s)
+           invoker (if limit?
+                     #(mapfn (.next (iter s)))
+                     #(mapfn (s)))]
+       (reify
+         Sequential
+         Limited
+         (has-limit? [this] limit?)
+         ITypedReduce
+         (reduce [this rfn acc]
+           (reduce #(rfn %1 (mapfn %2))
+                   acc s))
+         Iterable
+         (iterator [this]
+           (if limit?
+             (let [src-iter (iter s)]
+               (reify Iterator
+                 (hasNext [this] (.hasNext src-iter))
+                 (next [this] (mapfn (.next src-iter)))))
+             (reify Iterator
+               (hasNext [this] true)
+               (next [this] (invoker)))))
+         IFnDef$O
+         (invoke [this]
+           (invoker))))))
   ([mapfn a b]
    (cond (or (number? a) (number? b))
      (cond
@@ -443,11 +510,11 @@ user> (streams/sample 20 (streams/+ (streams/uniform-stream)
      (and (nil? (seq a)) (nil? (seq b)))
      '()
      :else
-     (map-n #(mapfn (aget ^objects % 0) (aget ^objects % 1)) [[a b]])))
+     (map-n #(mapfn (.get ^List % 0) (.get ^List % 1)) [[a b]])))
   ([mapfn a b c]
    (if (and (number? a) (number? b) (number? c))
      (mapfn a b c)
-     (map-n #(mapfn (aget ^objects % 0) (aget ^objects % 1) (aget ^objects % 2))
+     (map-n #(mapfn (.get ^List % 0) (.get ^List % 1) (.get ^List % 2))
             [[a b c]])))
   ([mapfn a b c & args]
    (map-n #(.applyTo ^IFn mapfn (ArraySeq/create ^objects %))
@@ -483,55 +550,121 @@ user> (streams/sample 20 (streams/+ (streams/uniform-stream)
       v)))
 
 
+(deftype ^:private UnlimitedInterleaveIter [^objects suppliers
+                                            ^{:tag long
+                                              :unsynchronized-mutable true} iteridx]
+  Iterator
+  (hasNext [this] true)
+  (next [this]
+    (let [len (alength suppliers)
+          v ((aget suppliers iteridx))]
+      (set! iteridx (rem (unchecked-inc iteridx) len))
+      v)))
+
+
 (defn interleave
   "Fast noncaching form of interleave."
   ([] '())
   ([c0] c0)
   ([c0 c1]
-   (if (or (nil? (seq c0))
-           (nil? (seq c1)))
-     '()
-     (reify
-       Sequential
-       ITypedReduce
-       (reduce [this rfn acc]
-         (let [i0 (iter c0)
-               i1 (iter c1)]
-           (loop [continue? (and (.hasNext i0) (.hasNext i1)
-                                 (not (reduced? acc)))
-                  acc acc]
-             (if continue?
-               (let [acc (rfn acc (.next i0))
-                     acc (if-not (reduced? acc)
-                           (rfn acc (.next i1)))]
-                 (recur (and (.hasNext i0) (.hasNext i1)
-                             (not (reduced? acc)))
-                        acc))
-               (if (reduced? acc) (deref acc) acc)))))
-       Iterable
-       (iterator [this]
-         (let [i0 (iter c0)
-               i1 (iter c1)]
-           (InterleaveIter. (hamf/object-array [i0 i1]) 0 (and (.hasNext i0) (.hasNext i1)))))
-       IFnDef$O
-       (invoke [this]
-         (.next (iter this))))))
+   (let [c0 (to-supplier c0)
+         c1 (to-supplier c1)]
+     (if (or (nil? (seq c0))
+             (nil? (seq c1)))
+       '()
+       (let [limit? (or (streams-p/has-limit? c0)
+                        (streams-p/has-limit? c1))
+             invoker-fn (fn []
+                          (let [invoke-idx (volatile! 0)]
+                            (if limit?
+                              (fn []
+                                (let [argidx (long @invoke-idx)]
+                                  (vreset! invoke-idx (rem (unchecked-inc argidx) 2))
+                                  (if (== argidx 0)
+                                    (.next (iter c0))
+                                    (.next (iter c1)))))
+                              (fn []
+                                (let [argidx (long @invoke-idx)]
+                                  (vreset! invoke-idx)
+                                  (if (== argidx 0) (c0) (c1)))))))
+             invoker (invoker-fn)]
+         (reify
+           Sequential
+           Limited
+           (has-limit? [this] limit?)
+           ITypedReduce
+           (reduce [this rfn acc]
+             (if limit?
+               (let [i0 (iter c0)
+                     i1 (iter c1)]
+                 (loop [continue? (and (.hasNext i0) (.hasNext i1)
+                                       (not (reduced? acc)))
+                        acc acc]
+                   (if continue?
+                     (let [acc (rfn acc (.next i0))
+                           acc (if-not (reduced? acc)
+                                 (rfn acc (.next i1)))]
+                       (recur (and (.hasNext i0) (.hasNext i1)
+                                   (not (reduced? acc)))
+                              acc))
+                     (if (reduced? acc) (deref acc) acc))))
+               (loop [idx 0
+                      acc acc]
+                 (let [acc (rfn acc (if (== idx 0)
+                                      (c0) (c1)))]
+                   (if (reduced? acc)
+                     (deref acc)
+                     (recur (rem (unchecked-inc idx) 2) acc))))))
+           Iterable
+           (iterator [this]
+             (if limit?
+               (let [i0 (iter c0)
+                     i1 (iter c1)]
+                 (InterleaveIter. (hamf/object-array [i0 i1]) 0 (and (.hasNext i0) (.hasNext i1))))
+               (let [iter-inv (invoker-fn)]
+                 (reify Iterator
+                   (hasNext [this] true)
+                   (next [this] (iter-inv))))))
+           IFnDef$O
+           (invoke [this]
+             (invoker)))))))
   ([c0 c1 & args]
    (let [all-args (lznc/apply-concat [[c0 c1] args])
-         iter-fn (fn [] (let [iters (hamf/object-array (lznc/map iter all-args))]
-                          (InterleaveIter. iters 0 (reduce-has-next iters))))]
+         limit? (boolean (some streams-p/has-limit? (lznc/apply-concat all-args)))
+         all-args (if limit? all-args (hamf/object-array (map to-supplier all-args)))
+         iter-fn (if limit?
+                     (fn []
+                       (let [iters (hamf/object-array (map iter all-args))]
+                         (InterleaveIter. iters 0 (reduce-has-next iters))))
+                     (let [^objects all-args all-args]
+                       (fn []
+                         (UnlimitedInterleaveIter. all-args 0))))
+         ^Iterator invoker-iter (iter-fn)
+         invoker (if limit?
+                   #(when (.hasNext invoker-iter)
+                      (.next invoker-iter))
+                   #(.next invoker-iter))]
      (reify
        Sequential
+       Limited
+       (has-limit? [this] limit?)
        ITypedReduce
        (reduce [this rfn acc]
-         (Reductions/iterReduce this acc rfn))
+         (if limit?
+           (Reductions/iterReduce this acc rfn)
+           (let [^objects all-args all-args
+                 n-args (alength all-args)]
+             (loop [idx 0
+                    acc acc]
+               (if (reduced? acc)
+                 (deref acc)
+                 (recur (rem (unchecked-inc idx) n-args) (rfn acc ((aget all-args idx)))))))))
        Iterable
        (iterator [this]
-         (let [iters (hamf/object-array (lznc/map iter all-args))]
-           (InterleaveIter. iters 0 (reduce-has-next iters))))
+         (iter-fn))
        IFnDef$O
        (invoke [this]
-         (.next (iter this)))))))
+         (invoker))))))
 
 (deftype ProbInterleaveIter [^doubles norm-probs
                              rng
@@ -555,6 +688,23 @@ user> (streams/sample 20 (streams/+ (streams/uniform-stream)
       (set! has-next (.hasNext iter))
       (set! next-value (if has-next (.next iter) nil))
       v)))
+
+
+(deftype UnlimitedProbInterleaveIter [^doubles norm-probs
+                                      rng
+                                      ^objects suppliers]
+  Iterator
+  (hasNext [this] true)
+  (next [this]
+    (let [nd (double (rng))
+          len (alength norm-probs)
+          next-idx (long
+                    (loop [idx 0]
+                      (if (and (< idx len) (< (aget norm-probs idx) nd))
+                        (recur (unchecked-inc idx))
+                        idx)))]
+      ((aget suppliers next-idx)))))
+
 
 (defn prob-interleave
   "Probabilistically interleave multiple streams.  Each argument must be a tuple
@@ -580,8 +730,8 @@ streams.graphs> (streams/sample 20 (streams/prob-interleave [[(streams/gaussian-
   ([args opts]
    (if-not (seq args)
      '()
-     (let [probs (vec (lznc/map second args))
-           streams (vec (lznc/map first args))
+     (let [probs (mapv second args)
+           streams (mapv first args)
            _ (when-not (every? number? probs)
                (throw (RuntimeException. "All arguments must be tuples with the first member
 a stream and the second member a number.")))
@@ -596,20 +746,34 @@ a stream and the second member a number.")))
                         acc))
                      0.0
                      probs)
-           rng (opts->sampler opts :uniform)]
+           rng (opts->sampler opts :uniform)
+           limited? (boolean (some streams-p/has-limit? streams))
+           iter-fn (fn []
+                     (if limited?
+                       (let [iters (hamf/object-array (map iter streams))]
+                         (doto (ProbInterleaveIter. norm-probs rng iters true nil)
+                           (.next)))
+                       (UnlimitedProbInterleaveIter. norm-probs rng
+                                                     (hamf/object-array (map to-supplier streams)))))
+           ^Iterator invoker-iter (iter-fn)]
        (reify
          Sequential
+         Limited
+         (has-limit? [this] limited?)
          ITypedReduce
          (reduce [this rfn acc]
-           (Reductions/iterReduce this acc rfn))
+           (if limited?
+             (Reductions/iterReduce this acc rfn)
+             (loop [acc (rfn acc (.next invoker-iter))]
+               (if (reduced? acc)
+                 (deref acc)
+                 (recur (rfn acc (.next invoker-iter)))))))
          Iterable
          (iterator [this]
-           (let [iters (hamf/object-array (lznc/map iter streams))]
-             (doto (ProbInterleaveIter. norm-probs rng iters true nil)
-               (.next))))
+           (iter-fn))
          IFnDef$O
          (invoke [this]
-           (.next (iter this)))))))
+           (.next invoker-iter))))))
   ([args] (prob-interleave args nil)))
 
 
@@ -633,13 +797,13 @@ may be streams or double scalars." (name op-sym))
          ([~'a ~'b] (map bi-arg# ~'a ~'b))
          ([~'a ~'b ~'c] (map tri-arg# ~'a ~'b ~'c))
          ([~'a ~'b ~'c & ~'args]
-          (map-n (fn [~(with-meta 'args {:tag 'objects})]
-                   (let [len# (alength ~'args)]
-                     (loop [acc# (~core-sym (double (aget ~'args 0))
-                                  (double (aget ~'args 1)))
+          (map-n (fn [~(with-meta 'args {:tag 'List})]
+                   (let [len# (.size ~'args)]
+                     (loop [acc# (~core-sym (double (.get ~'args 0))
+                                  (double (.get ~'args 1)))
                             idx# 2]
                        (if (< idx# len#)
-                         (recur (~core-sym acc# (double (aget ~'args idx#)))
+                         (recur (~core-sym acc# (double (.get ~'args idx#)))
                                 (unchecked-inc idx#))
                          acc#))))
                  [[~'a ~'b ~'c] ~'args]))))))
