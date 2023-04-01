@@ -160,7 +160,7 @@ Clojure's core libraries -- in fact the chunking system introduced into Clojure'
 model makes the lazy caching pathway significantly more efficient.
 
 Lazy caching is a much more forgiving computational model - but it eliminates several crucial,
-important optimization opportunities.  As stated earlier in the ready lazy noncaching sequences 
+important optimization opportunities.  As stated earlier in the readme lazy noncaching sequences 
 can be as efficient as lazy noncaching random access models if we avoid limiting the streams
 and can compute with infinite streams.
 
