@@ -10,19 +10,25 @@
            [clojure.lang IReduceInit])
   (:gen-class))
 
-(defn mkl-uniform-gen
+(defn mkl-gaussian-gen
   []
-  (println "benchmark mkl uniform generation")
+  (println "benchmark mkl gaussian generation")
   (mkl/initialize!)
   (resource/stack-resource-context
    (let [sampler (streams/opts->sampler nil :gaussian)
-         batch-gen (streams/batch-stream (mkl/rng-stream 2048 {:dist :gaussian :a 0.0 :sigma 1.0}))]
+         batch-gen (->> (mkl/rng-stream
+                         2048 {:dist :gaussian :a 0.0 :sigma 1.0})
+                        (streams/batch-stream))]
      (println "jvm generation")
      (crit/quick-bench (dotimes [idx 100000]
                          (sampler)))
      (println "mkl generation")
      (crit/quick-bench (dotimes [idx 100000]
-                         (batch-gen))))))
+                         (batch-gen)))
+     (println "jvm reduction")
+     (crit/quick-bench (streams/sample 100000 (streams/stream (sampler))))
+     (println "mkl reductions")
+     (crit/quick-bench (streams/sample 100000 batch-gen)))))
 
 
 (defn -main

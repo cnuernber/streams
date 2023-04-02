@@ -44,7 +44,8 @@ user> (streams/sample 20 (streams/+ (streams/uniform-stream)
             [streams.protocols :as streams-p]
             [fastmath.random :as fast-r]
             [fastmath.protocols :as fast-p])
-  (:import [ham_fisted Transformables ITypedReduce Casts IFnDef IFnDef$O Reductions]
+  (:import [ham_fisted Transformables ITypedReduce Casts IFnDef IFnDef$O Reductions
+            BatchReducer]
            [streams.protocols Limited]
            [java.util.function Supplier Predicate]
            [java.util Random Iterator NoSuchElementException Map List]
@@ -181,11 +182,15 @@ user> (streams/sample 20 (streams/+ (streams/uniform-stream)
       rv)))
 
 
+(extend-type BatchReducer
+  streams-p/Limited
+  (has-limit? [this] false))
+
 (defn batch-stream
-  "Given a function that returns a batch of data - which needs to look like a function
-  from index to value - make a stream that reads the values of the batches."
+  "Given a function that returns a batch of data - which needs to look like a java.util.List
+  make a stream that reads the values of the batches."
   [batch-fn]
-  (BatchStream. batch-fn nil 0 0))
+  (BatchReducer. batch-fn))
 
 
 (defn limited?
