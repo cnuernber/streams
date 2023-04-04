@@ -21,7 +21,9 @@
                  :exclusions [org.graalvm.js/js org.graalvm.js/js-scriptengine]}
                 org.graalvm.js/js {:mvn/version "20.3.2"}
                 org.graalvm.js/js-scriptengine {:mvn/version "20.3.2"}
-                com.cnuernber/mkl {:mvn/version "1.000-beta-2"}}}
+                com.cnuernber/mkl {:mvn/version "1.000-beta-2"}
+                com.cnuernber/applemath {:git/url "https://github.com/cnuernber/applemath"
+                                         :sha "05d26f7caa21e2672484d9c693b406b0de7bb1f7"}}}
   :test
   {:extra-deps {com.cognitect/test-runner
                 {:git/url "https://github.com/cognitect-labs/test-runner"

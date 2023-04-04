@@ -3,6 +3,7 @@
             [tech.v3.datatype :as dt]
             [tech.v3.datatype.functional :as dfn]
             [mkl.api :as mkl]
+            [applemath.api :as applemath]
             [tech.v3.resource :as resource]
             [criterium.core :as crit])
   (:import [ham_fisted Reductions]
@@ -28,6 +29,27 @@
      (println "jvm reduction")
      (crit/quick-bench (streams/sample 100000 (streams/stream (sampler))))
      (println "mkl reductions")
+     (crit/quick-bench (streams/sample 100000 batch-gen)))))
+
+
+(defn apple-accelerate-gaussian-gen
+  []
+  (println "benchmark apple's accelerate framework gaussian generation")
+  (applemath/initialize!)
+  (resource/stack-resource-context
+   (let [sampler (streams/opts->sampler nil :gaussian)
+         batch-gen (->> (applemath/rng-stream
+                         2048 {:dist :gaussian :a 0.0 :sigma 1.0})
+                        (streams/batch-stream))]
+     (println "jvm generation")
+     (crit/quick-bench (dotimes [idx 100000]
+                         (sampler)))
+     (println "accelerate generation")
+     (crit/quick-bench (dotimes [idx 100000]
+                         (batch-gen)))
+     (println "jvm reduction")
+     (crit/quick-bench (streams/sample 100000 (streams/stream (sampler))))
+     (println "accelerate Reduction")
      (crit/quick-bench (streams/sample 100000 batch-gen)))))
 
 
