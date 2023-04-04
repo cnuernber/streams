@@ -63,6 +63,16 @@
       (println "stream summation reduction")
       (println "pure clj example")
       (crit/quick-bench (double-array (take 10000 (map + rs rs rs rs))))
+      (println "clj typed math")
+      (crit/quick-bench (double-array (take 10000 (map (fn [& args]
+                                                         (loop [rval 0.0
+                                                                args args]
+                                                           (let [item (first args)]
+                                                             (if item
+                                                               (recur (+ rval (double item))
+                                                                      (rest args))
+                                                               rval))))
+                                                       rs rs rs rs))))
       (println "stream summation")
       (crit/quick-bench (streams/sample (streams/take 10000
                                                       (streams/+ s s s s))))
