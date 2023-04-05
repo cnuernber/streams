@@ -186,9 +186,9 @@ The summation reduction test is meant to test nontrivial composition - sum 4 str
 
 
 
-| system | code                                                                                                     | performance   |
-| ------ | ---                                                                                                      | -----------:  |
-| clj    | `(double-array (take 10000 (map + rs rs rs rs)))`                                                        | 6.530224 ms   |
-| stream | `(streams/sample 10000 (streams/+ s s s s))`                                                             | 280.429330 µs |
-| dtype  | `(dt/->array (dfn/+ rdr rdr rdr rdr))`                                                                   | 278.655565 µs |
-| inline | `(streams/sample 10000 (+ (double (sampler)) (double (sampler)) (double (sampler)) (double (sampler))))` | 229.377059 µs |
+| system | code                                                                                                                      | performance   |
+| ------ | ---                                                                                                                       | -----------:  |
+| clj    | `(double-array (take 10000 (map + rs rs rs rs)))`                                                                         | 6.530224 ms   |
+| stream | `(streams/sample 10000 (streams/+ s s s s))`                                                                              | 280.429330 µs |
+| dtype  | `(dt/->array (dfn/+ rdr rdr rdr rdr))`                                                                                    | 278.655565 µs |
+| inline | `(streams/sample 10000 (streams/stream (+ (double (sampler)) (double (sampler)) (double (sampler)) (double (sampler)))))` | 229.377059 µs |
