@@ -957,8 +957,36 @@ may be streams or double scalars." (name op-sym)))))
 
 
 (defn bin-stream
-  "Bin a stream returning a sorted vector of {x-axis-name xval y-axis-name yval}.
-  Returned values are sorted by x-axis-name."
+  "Bin a stream returning a sorted vector of {x-axis-name bin-left-marker y-axis-name sample-count}.
+  Returned values are sorted by x-axis-name.
+
+  The bin-size, x-axis-name and y-axis-name are returned as metdata on the return value.
+
+  Example:
+
+```clojure
+user> (require '[streams.api :as streams])
+nil
+user> (def binned-data (streams/bin-stream (streams/gaussian-stream)))
+#'user/binned-data
+user> (take 10 binned-data)
+({:value -4.071309307060194, :sample-count 1}
+ {:value -3.978351196824635, :sample-count 1}
+ {:value -3.8853930865890765, :sample-count 1}
+ {:value -3.7924349763535177, :sample-count 3}
+ {:value -3.6994768661179593, :sample-count 7}
+ {:value -3.6065187558824006, :sample-count 6}
+ {:value -3.513560645646842, :sample-count 4}
+ {:value -3.420602535411283, :sample-count 16}
+ {:value -3.3276444251757247, :sample-count 18}
+ {:value -3.2346863149401663, :sample-count 24})
+user> (meta binned-data)
+{:x-axis-name :value,
+ :y-axis-name :sample-count,
+ :bin-size 0.10038157387285356,
+ :min -4.532502107459416,
+ :max 4.505655279825941}
+```"
   ([s {:keys [n-bins sample-count x-axis-name y-axis-name]
        :or {sample-count 100000
             x-axis-name :value
@@ -983,5 +1011,8 @@ may be streams or double scalars." (name op-sym)))))
                       {x-axis-name (clojure.core/+ smin (clojure.core/* binsize (long (key kv))))
                        y-axis-name (deref (val kv))})))
          (with-meta {:x-axis-name x-axis-name
-                     :y-axis-name y-axis-name}))))
+                     :y-axis-name y-axis-name
+                     :bin-size binsize
+                     :min smin
+                     :max smax}))))
   ([s] (bin-stream s nil)))
