@@ -138,6 +138,9 @@ user> (streams/sample 20 (streams/+ (streams/uniform-stream)
           (deref [this#] (.invoke this#)))))))
 
 
+;;It ended up being significantly faster to implement this exact object
+;;in java.  That would be a pathway for some basic research into Clojure's
+;;assembly generation.
 (deftype ^:private BatchStream [batch-fn
                                 ^:unsynchronized-mutable last-batch
                                 ^{:unsynchronized-mutable true
@@ -531,7 +534,8 @@ user> (streams/sample 20 (streams/+ (streams/uniform-stream)
      :else
      (let [limit? (streams-p/has-limit? s)
            invoker (if limit?
-                     #(mapfn (.next (iter s)))
+                     (let [iter (iter s)]
+                       #(mapfn (.next iter)))
                      #(mapfn (s)))]
        (reify
          Sequential
@@ -808,7 +812,7 @@ a stream and the second member a number.")))
                      (if limited?
                        (let [iters (hamf/object-array (map iter streams))]
                          (doto (ProbInterleaveIter. norm-probs rng iters true nil)
-                           (.next)))
+                          (.next)))
                        (UnlimitedProbInterleaveIter. norm-probs rng
                                                      (hamf/object-array (map to-supplier streams)))))
            ^Iterator invoker-iter (iter-fn)]

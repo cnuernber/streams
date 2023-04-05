@@ -5,7 +5,7 @@ Simple programmatic model for infinite streams of numbers or objects primitive
 and doing arithmetic operations (in double space) on them.  Provides basic structure for
 monte-carlo simulations.
 
-Streams are an interesting concept as they are lazy noncaching and also not indexable.  If we 
+Streams are an interesting concept as they are lazy noncaching and also not indexable.  If we
 combine lazy-noncaching with infinite or unlimited streams we get an extremely efficient
 compositional model as we don't need iterators in the composition -- there is no need to
 check `hasNext`.  We can simply get the next item - throughout this library the things returned
@@ -13,8 +13,8 @@ implement this efficiently in the unlimited case in the 0-arg IFn implementation
 just call them with no arguments.
 
 When we stick to unlimited streams we get as efficient a compositional model as dtype-next's with
-a simpler definition and composition rules and *without* needing to type the data.  Both 
-dtype-next's compositional model and this library's compositional model are far faster 
+a simpler definition and composition rules and *without* needing to type the data.  Both
+dtype-next's compositional model and this library's compositional model are far faster
 as the compositions get more complex than either clojure's default lazy caching sequences or
 the transducer model which is lazy caching but limited.
 
@@ -143,13 +143,13 @@ user> (->> (streams/fastmath-stream :exponential)
  :max 18.57889358544537,
  :mean 10.982617281509123}
 ```
- 
+
 # Lies, Damn Lies, And Benchmarks!
- 
+
 I benchmarked this library on my m1-mac with the brew-installed jdk-19.  The
-benchmark code is [perftest.clj](dev/src/perftest.clj), the script 
-in [scripts/benchmark](scripts/benchmark) and the results are 
-checked into [docs](docs/m1-mac-benchmark.data).  Here is a synopsis - 
+benchmark code is [perftest.clj](dev/src/perftest.clj), the script
+in [scripts/benchmark](scripts/benchmark) and the results are
+checked into [docs](docs/m1-mac-benchmark.data).  Here is a synopsis -
 Default clojure pathways are 6x slower roughly than either streams or dtype-next
 when there is no composition and -> 23x+ times slower when we perform a complex
 (4 arity) summation.
@@ -160,23 +160,23 @@ Clojure's core libraries -- in fact the chunking system introduced into Clojure'
 model makes the lazy caching pathway significantly more efficient.
 
 Lazy caching is a much more forgiving computational model - but it eliminates several crucial,
-important optimization opportunities.  As stated earlier in the readme lazy noncaching sequences 
+important optimization opportunities.  As stated earlier in the readme lazy noncaching sequences
 can be as efficient as lazy noncaching random access models if we avoid limiting the streams
 and can compute with infinite streams.
 
-#### Basic Reduction 
+#### Basic Reduction
 
 The basic reduction tests creates 10000 uniform doubles in a reduce call.  For the efficient systems,
 this is timing how expensive your random number generator is per-call.
 
 
-| system       | performance  |
-| ---          | ---:         |
-| clj          | 300 µs       |
-| stream       | 64.241910 µs |
-| dtype        | 59.200689 µs |
-| java typed   | 56.765409 µs |
-| java untyped | 56.077244 µs |
+| system       |   code                                                         | performance  |
+| ---          |  ---                                                           | ---:         |
+| clj          | `(repeatedly 10000 sampler)`                                   | 300 µs       |
+| stream       | `(streams/stream 10000 (sampler)`                              | 64.241910 µs |
+| dtype        | `(dt/make-reader :float64 10000 (sampler))`                    | 59.200689 µs |
+| java typed   | `(Reductions/doubleSamplerReduction rfn nil idxsampler 10000)` | 56.765409 µs |
+| java untyped |  `(Reductions/samplerReduction rfn nil idxsampler 10000)`      | 56.077244 µs |
 
 
 
@@ -186,9 +186,9 @@ The summation reduction test is meant to test nontrivial composition - sum 4 str
 
 
 
-| system | performance   |
-| ------ | -----------:  |
-| clj    | 6.530224 ms   |
-| stream | 280.429330 µs |
-| dtype  | 278.655565 µs |
-| inline | 229.377059 µs |
+| system | code                                                                                                     | performance   |
+| ------ | ---                                                                                                      | -----------:  |
+| clj    | `(double-array (take 10000 (map + rs rs rs rs)))`                                                        | 6.530224 ms   |
+| stream | `(streams/sample 10000 (streams/+ s s s s))`                                                             | 280.429330 µs |
+| dtype  | `(dt/->array (dfn/+ rdr rdr rdr rdr))`                                                                   | 278.655565 µs |
+| inline | `(streams/sample 10000 (+ (double (sampler)) (double (sampler)) (double (sampler)) (double (sampler))))` | 229.377059 µs |

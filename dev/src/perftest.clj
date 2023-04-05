@@ -96,16 +96,13 @@
                                                                rval))))
                                                        rs rs rs rs))))
       (println "stream summation")
-      (crit/quick-bench (streams/sample (streams/take 10000
-                                                      (streams/+ s s s s))))
+      (crit/quick-bench (streams/sample 10000 (streams/+ s s s s)))
       (println "dtype summation")
       (crit/quick-bench (dt/->array (dfn/+ rdr rdr rdr rdr)))
 
       (println "inline stream summation")
-      (crit/quick-bench (streams/sample (streams/stream
-                                         10000
-                                         (+ (+ (double (sampler))
-                                               (double (sampler)))
-                                            (+ (double (sampler))
-                                               (double (sampler))))))))
+      (crit/quick-bench (streams/sample 10000 (+ (+ (double (sampler))
+                                                    (double (sampler)))
+                                                 (+ (double (sampler))
+                                                    (double (sampler)))))))
     (println "done")))
