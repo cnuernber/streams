@@ -336,6 +336,8 @@ user> (streams/sample 20 (streams/+ (streams/uniform-stream)
       (set! n nn)
       v)))
 
+(def darray-cls (Class/forName "[D"))
+
 
 (defn take
   "Take at most N elements from this stream.  Returns a new stream."
@@ -345,6 +347,12 @@ user> (streams/sample 20 (streams/+ (streams/uniform-stream)
     (stream n s)
     (nil? (seq s))
     '()
+    (instance? darray-cls s)
+    (let [^doubles data s
+          slen (alength data)]
+      (if (> slen n)
+        (hamf/double-array (hamf/subvec data 0 n))
+        s))
     :else
     (reify
       Sequential
@@ -368,9 +376,11 @@ user> (streams/sample 20 (streams/+ (streams/uniform-stream)
   "Sample stream into a double array.  If n is not provided, stream must either
   already have a limit or an oom is imminent."
   (^doubles [s]
-   (hamf/double-array s))
+   (if (instance? darray-cls s)
+     s
+     (hamf/double-array s)))
   (^doubles [n s]
-   (hamf/double-array (take n s))))
+   (sample (take n s))))
 
 
 (deftype ^:private FilterIter [^Iterator data-iter
