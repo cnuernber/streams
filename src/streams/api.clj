@@ -45,7 +45,7 @@ user> (streams/sample 20 (streams/+ (streams/uniform-stream)
             [fastmath.random :as fast-r]
             [fastmath.protocols :as fast-p])
   (:import [ham_fisted Transformables ITypedReduce Casts IFnDef IFnDef$O Reductions
-            BatchReducer]
+            BatchReducer Consumers$IncConsumer]
            [streams.protocols Limited]
            [java.util.function Supplier Predicate]
            [java.util Random Iterator NoSuchElementException Map List]
@@ -545,6 +545,10 @@ user> (streams/sample 20 (streams/+ (streams/uniform-stream)
          (reduce [this rfn acc]
            (reduce #(rfn %1 (mapfn %2))
                    acc s))
+         (parallelReduction [this init-val-fn rfn merge-fn opts]
+           (Reductions/parallelReduction init-val-fn
+                                         #(rfn %1 (mapfn %2))
+                                         merge-fn s opts))
          Iterable
          (iterator [this]
            (if limit?
@@ -934,6 +938,23 @@ may be streams or double scalars." (name op-sym)))))
   (deref [this] {:min dmin :max dmax}))
 
 
+(defn ^:no-doc quick-n-dirty-frequencies
+  "Faster implementation of clojure.core/frequencies.  Leaves results in the inc consumer
+  you can deref the value to get actual result."
+  [coll]
+  (let [cfn (hamf/function v (Consumers$IncConsumer.))
+        merge-fn (hamf/bi-function
+                  v1 v2
+                  (.reduce ^ham_fisted.Reducible v1 v2))]
+    (hamf/preduce hamf/mut-map
+                  (fn [^Map l v]
+                    (.inc ^Consumers$IncConsumer (.computeIfAbsent l v cfn))
+                    l)
+                  #(hamf/mut-map-union! merge-fn %1 %2)
+                  {:min-n 1000}
+                  coll)))
+
+
 
 (defn bin-stream
   "Bin a stream returning a sorted vector of {x-axis-name xval y-axis-name yval}.
@@ -952,15 +973,15 @@ may be streams or double scalars." (name op-sym)))))
          smin (double smin)
          smax (double smax)
          binsize (clojure.core// (clojure.core/+ 1.0 (clojure.core/- smax smin)) n-bins)]
-     (-> (->> (hamf/frequencies (map (fn ^long [^double d]
-                                       (long (clojure.core// (clojure.core/- d smin) binsize)))
-                                     data))
+     (-> (->> (quick-n-dirty-frequencies (lznc/map (fn ^long [^double d]
+                                                     (long (clojure.core// (clojure.core/- d smin) binsize)))
+                                                   data))
               ;;type-hinting the sort-by method allows us to use faster indirect
               ;;sorting provided by fastutil
               (hamf/sort-by (fn ^long [kv] (long (key kv))))
               (mapv (fn [kv]
                       {x-axis-name (clojure.core/+ smin (clojure.core/* binsize (long (key kv))))
-                       y-axis-name (val kv)})))
+                       y-axis-name (deref (val kv))})))
          (with-meta {:x-axis-name x-axis-name
                      :y-axis-name y-axis-name}))))
   ([s] (bin-stream s nil)))
