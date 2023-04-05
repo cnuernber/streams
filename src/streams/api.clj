@@ -914,3 +914,53 @@ may be streams or double scalars." (name op-sym)))))
 
 
 (def-double-unary-op fastmath.core/log1p)
+
+(deftype MinMaxReducer [^{:unsynchronized-mutable true
+                          :tag double} dmin
+                        ^{:unsynchronized-mutable true
+                          :tag double} dmax
+                        ^:unsynchronized-mutable first-val]
+  java.util.function.DoubleConsumer
+  (accept [this v]
+    (if first-val
+      (do
+        (set! dmin v)
+        (set! dmax v)
+        (set! first-val false))
+      (do
+        (set! dmin (clojure.core/min v dmin))
+        (set! dmax (clojure.core/max v dmax)))))
+  IDeref
+  (deref [this] {:min dmin :max dmax}))
+
+
+
+(defn bin-stream
+  "Bin a stream returning a sorted vector of {x-axis-name xval y-axis-name yval}.
+  Returned values are sorted by x-axis-name."
+  ([s {:keys [n-bins sample-count x-axis-name y-axis-name]
+       :or {sample-count 100000
+            x-axis-name :value
+            y-axis-name :sample-count}}]
+   (let [data (sample sample-count s)
+         n-bins (long (or n-bins
+                          (clojure.core/min 100 (clojure.core/max 10 (long (clojure.core// (alength data) 100))))))
+         {smin :min
+          smax :max} @(reduce hamf/double-consumer-accumulator
+                              (MinMaxReducer. Double/NaN Double/NaN true)
+                              data)
+         smin (double smin)
+         smax (double smax)
+         binsize (clojure.core// (clojure.core/+ 1.0 (clojure.core/- smax smin)) n-bins)]
+     (-> (->> (hamf/frequencies (map (fn ^long [^double d]
+                                       (long (clojure.core// (clojure.core/- d smin) binsize)))
+                                     data))
+              ;;type-hinting the sort-by method allows us to use faster indirect
+              ;;sorting provided by fastutil
+              (hamf/sort-by (fn ^long [kv] (long (key kv))))
+              (mapv (fn [kv]
+                      {x-axis-name (clojure.core/+ smin (clojure.core/* binsize (long (key kv))))
+                       y-axis-name (val kv)})))
+         (with-meta {:x-axis-name x-axis-name
+                     :y-axis-name y-axis-name}))))
+  ([s] (bin-stream s nil)))

@@ -32,38 +32,21 @@ nil
 
 
 (defn stream-area-chart
-  "Create an area chart of the histogram of the stream."
-  [s {:keys [title width height y-axis-name x-axis-name]
-      :or {title "" width 800 height 600 y-axis-name :sample-count
-           x-axis-name :value}
+  "Create an area chart of the histogram of the stream.  See documentation
+  for [[streams.api/bin-stream]]."
+  [s {:keys [title width height]
+      :or {title "" width 800 height 600}
       :as opts}]
-  (let [data (streams/sample 100000 s)
-        {:keys [min max] :as info} (hamf/reduce-reducer
-                                    (hamf/compose-reducers
-                                     {:min kixi/min
-                                      :max kixi/max})
-                                    data)
-        min (double min)
-        max (double max)
-        n-bins (or (:n-bins opts)
-                   (long (clojure.core/min 100 (clojure.core/max 10 (/ (alength data) 100)))))
-        binsize (/ (+ 1.0 (- max min)) n-bins)
-        freqs (hamf/frequencies (streams/map (fn ^long [^double d]
-                                               (long (/ (- d min) binsize)))
-                                             data))
-        chart-data (->> freqs
-                        ;;type-hinting the sort-by method allows us to use faster indirect
-                        ;;sorting provided by fastutil
-                        (hamf/sort-by (fn ^long [kv] (long (key kv))))
-                        (mapv (fn [kv]
-                                {x-axis-name (+ min (* binsize (long (key kv))))
-                                 y-axis-name (val kv)})))]
+  (let [vals (streams/bin-stream s opts)
+        vals-m (meta vals)
+        x-axis-name (vals-m :x-axis-name)
+        y-axis-name (vals-m :y-axis-name)]
     {:$schema "https://vega.github.io/schema/vega-lite/v5.1.0.json"
      :mark {"type" "area" "line" true}
      :title title
      :width width
      :height height
-     :data {:values chart-data}
+     :data {:values (streams/bin-stream s opts)}
      :encoding
      {:y {:field y-axis-name :type :quantitative :axis {:grid false}}
       :x {:field x-axis-name :type :quantitative :axis {:grid false}}}}))
