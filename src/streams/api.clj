@@ -956,7 +956,7 @@ may be streams or double scalars." (name op-sym)))))
         merge-fn (hamf/bi-function
                   v1 v2
                   (.reduce ^ham_fisted.Reducible v1 v2))]
-    (hamf/preduce hamf/mut-map
+    (hamf/preduce hamf/mut-long-hashtable-map
                   (fn [^Map l v]
                     (.inc ^Consumers$IncConsumer (.computeIfAbsent l v cfn))
                     l)
