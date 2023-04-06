@@ -659,7 +659,7 @@ user> (streams/sample 20 (streams/+ (streams/uniform-stream)
                                     (.next (iter c1)))))
                               (fn []
                                 (let [argidx (long @invoke-idx)]
-                                  (vreset! invoke-idx)
+                                  (vreset! (rem (unchecked-inc invoke-idx) 2))
                                   (if (== argidx 0) (c0) (c1)))))))
              invoker (invoker-fn)]
          (reify
