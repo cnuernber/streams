@@ -39,6 +39,8 @@ user> (streams/sample 20 (streams/+ (streams/uniform-stream)
   (steams/+ (streams/take 10000 a) b)
 ```"
   (:require [ham-fisted.api :as hamf]
+            [ham-fisted.reduce :as hamf-rf]
+            [ham-fisted.function :as hamf-fn]
             [ham-fisted.protocols :as hamf-p]
             [ham-fisted.lazy-noncaching :as lznc]
             [streams.protocols :as streams-p]
@@ -659,7 +661,7 @@ user> (streams/sample 20 (streams/+ (streams/uniform-stream)
                                     (.next (iter c1)))))
                               (fn []
                                 (let [argidx (long @invoke-idx)]
-                                  (vreset! (rem (unchecked-inc invoke-idx) 2))
+                                  (vreset! (rem (unchecked-inc argidx) 2))
                                   (if (== argidx 0) (c0) (c1)))))))
              invoker (invoker-fn)]
          (reify
@@ -811,7 +813,7 @@ streams.graphs> (streams/sample 20 (streams/prob-interleave [[(streams/gaussian-
 a stream and the second member a number.")))
            prob-sum (double (hamf/sum-fast probs))
            norm-probs (double-array (count probs))
-           _ (reduce (hamf/indexed-accum
+           _ (reduce (hamf-rf/indexed-accum
                       acc idx prob
                       (let [acc (double (clojure.core/+
                                          (double acc) (clojure.core//
@@ -952,11 +954,11 @@ may be streams or double scalars." (name op-sym)))))
   "Faster implementation of clojure.core/frequencies.  Leaves results in the inc consumer
   you can deref the value to get actual result."
   [coll]
-  (let [cfn (hamf/function v (Consumers$IncConsumer.))
-        merge-fn (hamf/bi-function
+  (let [cfn (hamf-fn/function v (Consumers$IncConsumer.))
+        merge-fn (hamf-fn/bi-function
                   v1 v2
                   (.reduce ^ham_fisted.Reducible v1 v2))]
-    (hamf/preduce hamf/mut-long-hashtable-map
+    (hamf-rf/preduce hamf/mut-long-hashtable-map
                   (fn [^Map l v]
                     (.inc ^Consumers$IncConsumer (.computeIfAbsent l v cfn))
                     l)
@@ -1005,7 +1007,7 @@ user> (meta binned)
          n-bins (long (or n-bins
                           (clojure.core/min 100 (clojure.core/max 10 (long (clojure.core// (alength data) 100))))))
          {smin :min
-          smax :max} @(reduce hamf/double-consumer-accumulator
+          smax :max} @(reduce hamf-rf/double-consumer-accumulator
                               (MinMaxReducer. Double/NaN Double/NaN true)
                               data)
          smin (double smin)

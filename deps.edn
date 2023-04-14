@@ -1,5 +1,5 @@
 {:paths ["src"]
- :deps {com.cnuernber/ham-fisted {:mvn/version "1.000-beta-93"}
+ :deps {com.cnuernber/ham-fisted {:mvn/version "1.000-beta-96"}
         kixi/stats {:mvn/version "0.5.5"}
         generateme/fastmath
         {:mvn/version "2.1.8"
@@ -14,7 +14,7 @@
  {:dev
   {:extra-deps {criterium/criterium {:mvn/version "0.4.5"}
                 com.cnuernber/charred {:mvn/version "1.026"}
-                cnuernber/dtype-next {:mvn/version "10.000-beta-43"}
+                cnuernber/dtype-next {:mvn/version "10.000-beta-45"}
                 applied-science/darkstar
                 {:git/url "https://github.com/appliedsciencestudio/darkstar/"
                  :sha "abd480cc382b7ae143f7902ee9d300cdc1a705cc"
