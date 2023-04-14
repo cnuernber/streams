@@ -97,6 +97,7 @@ user> (streams/sample 20 (streams/+ (streams/uniform-stream)
    `(let [l# ~l]
       (if l#
         (let [l# (long l#)]
+          ;;limited streams do not implement IFn
           (reify
             Sequential
             ITypedReduce
@@ -114,11 +115,7 @@ user> (streams/sample 20 (streams/+ (streams/uniform-stream)
             Counted
             (count [this] l#)
             Iterable
-            (iterator [this#] (CountingIter. l# this#))
-            IFnDef$O
-            (invoke [this#] ~code)
-            IDeref
-            (deref [this#] (.invoke this#))))
+            (iterator [this#] (CountingIter. l# this#))))
         (reify
           Sequential
           ITypedReduce
@@ -138,53 +135,6 @@ user> (streams/sample 20 (streams/+ (streams/uniform-stream)
           (invoke [this#] ~code)
           IDeref
           (deref [this#] (.invoke this#)))))))
-
-
-;;It ended up being significantly faster to implement this exact object
-;;in java.  That would be a pathway for some basic research into Clojure's
-;;assembly generation.
-(deftype ^:private BatchStream [batch-fn
-                                ^:unsynchronized-mutable last-batch
-                                ^{:unsynchronized-mutable true
-                                  :tag long} n-elems
-                                ^{:unsynchronized-mutable true
-                                  :tag long} idx]
-  Sequential
-  ITypedReduce
-  (reduce [this rfn acc]
-    (loop [ne n-elems
-           ix idx
-           data last-batch
-           acc acc]
-      (if (reduced? acc)
-        (do
-          (set! n-elems ne)
-          (set! idx ix)
-          (set! last-batch data)
-          (deref acc))
-        (let [rset? (== ix ne)
-              ix (long (if rset? 0 ix))
-              data (if rset? (batch-fn) data)
-              ne (long (if rset? (count data) ne))]
-          (recur ne (unchecked-inc ix) data (rfn acc (data ix)))))))
-  Limited
-  (has-limit? [this] false)
-  Iterable
-  (iterator [this]
-    (reify Iterator
-      (hasNext [i] true)
-      (next [i] (.invoke this))))
-  IFnDef$O
-  (invoke [this]
-    (when (== idx n-elems)
-      (let [nb (batch-fn)
-            ne (long (count nb))]
-        (set! last-batch nb)
-        (set! idx 0)
-        (set! n-elems ne)))
-    (let [rv (last-batch idx)]
-      (set! idx (unchecked-inc idx))
-      rv)))
 
 
 (extend-type BatchReducer
@@ -366,12 +316,7 @@ user> (streams/sample 20 (streams/+ (streams/uniform-stream)
       Iterable
       (iterator [this]
         (doto (CountingIterIter. n (iter s) true nil)
-          (.next)))
-      IFnDef$O
-      (invoke [this]
-        (if (<= n 0)
-          (throw (NoSuchElementException. "Iteration out of range"))
-          (.next (iter s)))))))
+          (.next))))))
 
 
 (defn sample
@@ -423,7 +368,8 @@ user> (streams/sample 20 (streams/+ (streams/uniform-stream)
     (let [^Predicate pred (if (instance? Predicate pred)
                             pred
                             (reify Predicate
-                              (test [this v] (boolean (pred v)))))]
+                              (test [this v] (boolean (pred v)))))
+          limited? (streams-p/has-limit? s)]
       (reify
         Sequential
         ITypedReduce
@@ -434,14 +380,19 @@ user> (streams/sample 20 (streams/+ (streams/uniform-stream)
                       acc))
                   acc s))
         Limited
-        (has-limit? [this] (streams-p/has-limit? s))
+        (has-limit? [this] limited?)
         Iterable
         (iterator [this]
           (doto (FilterIter. (iter s) pred nil true)
             (.next)))
         IFnDef$O
         (invoke [this]
-          (.next (iter this)))))))
+          (when limited?
+            (throw (RuntimeException. "Limited streams do not implement IFn")))
+          (loop [v (s)]
+            (if-not (.test pred v)
+              (recur (s))
+              v)))))))
 
 
 (defn- map-args->iter-create
@@ -490,8 +441,7 @@ user> (streams/sample 20 (streams/+ (streams/uniform-stream)
   (let [limit? (boolean (some streams-p/has-limit? (lznc/apply-concat argseq)))
         update-create (map-args->iter-create argseq limit?)
         invoker (if limit?
-                  #(when-let [fn-args ((update-create))]
-                     (mapfn fn-args))
+                  #(throw (RuntimeException. "Limited streams do not implement IFn"))
                   (let [fn-args ((update-create))]
                     #(mapfn fn-args)))]
     (reify
@@ -549,31 +499,45 @@ user> (streams/sample 20 (streams/+ (streams/uniform-stream)
                      (let [iter (iter s)]
                        #(mapfn (.next iter)))
                      #(mapfn (s)))]
-       (reify
-         Sequential
-         Limited
-         (has-limit? [this] limit?)
-         ITypedReduce
-         (reduce [this rfn acc]
-           (reduce #(rfn %1 (mapfn %2))
-                   acc s))
-         (parallelReduction [this init-val-fn rfn merge-fn opts]
-           (Reductions/parallelReduction init-val-fn
-                                         #(rfn %1 (mapfn %2))
-                                         merge-fn s opts))
-         Iterable
-         (iterator [this]
-           (if limit?
+       (if limit?
+         (reify
+           Sequential
+           Limited
+           (has-limit? [this] true?)
+           ITypedReduce
+           (reduce [this rfn acc]
+             (reduce #(rfn %1 (mapfn %2))
+                     acc s))
+           (parallelReduction [this init-val-fn rfn merge-fn opts]
+             (Reductions/parallelReduction init-val-fn
+                                           #(rfn %1 (mapfn %2))
+                                           merge-fn s opts))
+           Iterable
+           (iterator [this]
              (let [src-iter (iter s)]
                (reify Iterator
                  (hasNext [this] (.hasNext src-iter))
-                 (next [this] (mapfn (.next src-iter)))))
+                 (next [this] (mapfn (.next src-iter)))))))
+         (reify
+           Sequential
+           Limited
+           (has-limit? [this] limit?)
+           ITypedReduce
+           (reduce [this rfn acc]
+             (reduce #(rfn %1 (mapfn %2))
+                     acc s))
+           (parallelReduction [this init-val-fn rfn merge-fn opts]
+             (Reductions/parallelReduction init-val-fn
+                                           #(rfn %1 (mapfn %2))
+                                           merge-fn s opts))
+           Iterable
+           (iterator [this]
              (reify Iterator
                (hasNext [this] true)
-               (next [this] (invoker)))))
-         IFnDef$O
-         (invoke [this]
-           (invoker))))))
+               (next [this] (invoker))))
+           IFnDef$O
+           (invoke [this]
+             (invoker)))))))
   ([mapfn a b]
    (cond (or (number? a) (number? b))
      (cond
@@ -593,7 +557,7 @@ user> (streams/sample 20 (streams/+ (streams/uniform-stream)
      (map-n #(mapfn (.get ^List % 0) (.get ^List % 1) (.get ^List % 2))
             [[a b c]])))
   ([mapfn a b c & args]
-   (map-n #(.applyTo ^IFn mapfn (ArraySeq/create ^objects %))
+   (map-n #(.applyTo ^IFn mapfn (seq %))
           [[a b c] args])))
 
 (defn- reduce-has-next
@@ -653,12 +617,7 @@ user> (streams/sample 20 (streams/+ (streams/uniform-stream)
              invoker-fn (fn []
                           (let [invoke-idx (volatile! 0)]
                             (if limit?
-                              (fn []
-                                (let [argidx (long @invoke-idx)]
-                                  (vreset! invoke-idx (rem (unchecked-inc argidx) 2))
-                                  (if (== argidx 0)
-                                    (.next (iter c0))
-                                    (.next (iter c1)))))
+                              (throw (RuntimeException. "Limited streams do not implement IFn"))
                               (fn []
                                 (let [argidx (long @invoke-idx)]
                                   (vreset! (rem (unchecked-inc argidx) 2))
@@ -717,8 +676,7 @@ user> (streams/sample 20 (streams/+ (streams/uniform-stream)
                          (UnlimitedInterleaveIter. all-args 0))))
          ^Iterator invoker-iter (iter-fn)
          invoker (if limit?
-                   #(when (.hasNext invoker-iter)
-                      (.next invoker-iter))
+                   #(throw (RuntimeException. "Limited streams do not implement IFn"))
                    #(.next invoker-iter))]
      (reify
        Sequential
@@ -849,7 +807,9 @@ a stream and the second member a number.")))
            (iter-fn))
          IFnDef$O
          (invoke [this]
-           (.next invoker-iter))))))
+           (if limited?
+             (throw (RuntimeException. "Limited streams do not implement IFn"))
+             (.next invoker-iter)))))))
   ([args] (prob-interleave args nil)))
 
 
