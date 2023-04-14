@@ -50,11 +50,11 @@ nil
 
 # Usage
 
-Basic nongraphing dependencies:
+Basic nongraphing dependencies (use latest sha if below isn't latest):
 
 ```clojure
 com.cnuernber/streams {:git/url "https://github.com/cnuernber/streams/"
-                       :sha "c820e7963b9e1a38db184ccd79addd99dbdffae"}
+                       :sha "0873d6f4c169f4867481ca2d3c39aa99d1cb12ea"}
 ```
 
 See graphs namespace api docs for graphing dependencies - and off we go...
