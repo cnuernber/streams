@@ -428,10 +428,13 @@ user> (streams/sample 20 (streams/+ (streams/uniform-stream)
     (let [argseq (object-array
                   (into [] (comp cat (clojure.core/map to-supplier))
                         argseq))
+          argv (ham_fisted.ArrayLists/toList argseq)
           nargs (alength argseq)
           fn-args (reify ham_fisted.IMutList
                     (size [this] nargs)
-                    (get [this idx] ((aget argseq idx))))]
+                    (get [this idx] ((aget argseq idx)))
+                    (reduce [this rfn init]
+                      (.reduce argv #(rfn %1 (%2)) init)))]
       (fn []
         (fn []
           fn-args)))))
@@ -834,14 +837,15 @@ may be streams or double scalars." (name op-sym))
          ([~'a ~'b ~'c] (map tri-arg# ~'a ~'b ~'c))
          ([~'a ~'b ~'c & ~'args]
           (map-n (fn [~(with-meta 'args {:tag 'List})]
-                   (let [len# (.size ~'args)]
-                     (loop [acc# (~core-sym (double (.get ~'args 0))
-                                  (double (.get ~'args 1)))
-                            idx# 2]
-                       (if (< idx# len#)
-                         (recur (~core-sym acc# (double (.get ~'args idx#)))
-                                (unchecked-inc idx#))
-                         acc#))))
+                   (reduce bi-arg# ~'args)
+                   #_(let [len# (.size ~'args)]
+                       (loop [acc# (~core-sym (double (.get ~'args 0))
+                                    (double (.get ~'args 1)))
+                              idx# 2]
+                         (if (< idx# len#)
+                           (recur (~core-sym acc# (double (.get ~'args idx#)))
+                                  (unchecked-inc idx#))
+                           acc#))))
                  [[~'a ~'b ~'c] ~'args]))))))
 
 
