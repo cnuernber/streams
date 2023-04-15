@@ -101,8 +101,10 @@
       (crit/quick-bench (dt/->array (dfn/+ rdr rdr rdr rdr)))
 
       (println "inline stream summation")
-      (crit/quick-bench (streams/sample 10000 (+ (+ (double (sampler))
-                                                    (double (sampler)))
-                                                 (+ (double (sampler))
-                                                    (double (sampler)))))))
+      (crit/quick-bench (streams/sample 10000
+                                        (streams/stream
+                                         (+ (+ (double (sampler))
+                                               (double (sampler)))
+                                            (+ (double (sampler))
+                                               (double (sampler))))))))
     (println "done")))
