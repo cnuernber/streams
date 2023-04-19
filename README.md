@@ -170,13 +170,13 @@ The basic reduction tests creates 10000 uniform doubles in a reduce call.  For t
 this is timing how expensive your random number generator is per-call.
 
 
-| system       |   code                                                         | performance  |
-| ---          |  ---                                                           | ---:         |
-| clj          | `(repeatedly 10000 sampler)`                                   | 300 µs       |
-| stream       | `(streams/stream 10000 (sampler)`                              | 64.241910 µs |
-| dtype        | `(dt/make-reader :float64 10000 (sampler))`                    | 59.200689 µs |
-| java typed   | `(Reductions/doubleSamplerReduction rfn nil idxsampler 10000)` | 56.765409 µs |
-| java untyped |  `(Reductions/samplerReduction rfn nil idxsampler 10000)`      | 56.077244 µs |
+| system       |   code                                                         | performance µs |
+| ---          |  ---                                                           | ---:           |
+| clj          | `(repeatedly 10000 sampler)`                                   | 300            |
+| stream       | `(streams/stream 10000 (sampler))`                             | 64             |
+| dtype        | `(dt/make-reader :float64 10000 (sampler))`                    | 59             |
+| java typed   | `(Reductions/doubleSamplerReduction rfn nil idxsampler 10000)` | 57             |
+| java untyped | `(Reductions/samplerReduction rfn nil idxsampler 10000)`       | 56             |
 
 
 
@@ -185,10 +185,9 @@ this is timing how expensive your random number generator is per-call.
 The summation reduction test is meant to test nontrivial composition - sum 4 streams together.
 
 
-
-| system | code                                                                                                                      | performance   |
-| ------ | ---                                                                                                                       | -----------:  |
-| clj    | `(double-array (take 10000 (map + rs rs rs rs)))`                                                                         | 6.530224 ms   |
-| stream | `(streams/sample 10000 (streams/+ s s s s))`                                                                              | 280.429330 µs |
-| dtype  | `(dt/->array (dfn/+ rdr rdr rdr rdr))`                                                                                    | 278.655565 µs |
-| inline | `(streams/sample 10000 (streams/stream (+ (double (sampler)) (double (sampler)) (double (sampler)) (double (sampler)))))` | 229.377059 µs |
+| system | code                                                                                                                          | performance µs |
+| ------ | ---                                                                                                                           | -----------:   |
+| clj    | `(double-array (take 10000 (map + rs1 rs2 rs3 rs4)))`                                                                         | 6530           |
+| stream | `(streams/sample 10000 (streams/+ s1 s2 s3 s4))`                                                                              | 280            |
+| dtype  | `(dt/->array (dfn/+ rdr1 rdr2 rdr3 rdr4))`                                                                                    | 279            |
+| inline | `(streams/sample 10000 (streams/stream (+ (double (sampler1)) (double (sampler2)) (double (sampler3)) (double (sampler4)))))` | 229            |
