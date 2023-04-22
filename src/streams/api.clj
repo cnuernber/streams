@@ -357,7 +357,7 @@ streams.api> (ds)
       (set! n nn)
       v)))
 
-(def darray-cls (Class/forName "[D"))
+(def ^:no-doc darray-cls (Class/forName "[D"))
 
 
 (defn take
