@@ -185,30 +185,59 @@ user> (streams/sample 20 (streams/+ (streams/uniform-stream)
             (Random.))]
       #(.nextDouble rng))))
 
+
 (defn ^:no-doc opts->sampler
   "Return a random sampler from options."
   [opts type]
-  (->
-   (cond
-     (instance? Random opts)
-     opts
-     (instance? RandomGenerator opts)
-     opts
-     (fn? opts)
-     opts
-     :else
-     (if-let [rng (:rng opts)]
-       (if (keyword? rng)
-         (fast-r/rng rng)
-         rng)
-       (if-let [seed (:seed opts)]
-         (Random. (int seed))
-         (fast-r/rng :mersenne))))
-   (rng-sample-fn type)))
+  (let [seed (get opts :seed)]
+    (->
+     (cond
+       (instance? Random opts)
+       opts
+       (instance? RandomGenerator opts)
+       opts
+       (fn? opts)
+       opts
+       :else
+       (if-let [rng (:rng opts)]
+         (if (keyword? rng)
+           (fast-r/rng rng seed)
+           rng)
+         (if seed
+           (Random. (int seed))
+           (fast-r/rng :mersenne))))
+     (rng-sample-fn type))))
 
 
 (defn uniform-stream
-  "Create a uniform stream with values [0-1]"
+  "Create a uniform stream with values [0-1].  An integer seed may be provided with
+  :seed.  The specific rng you want may be selected with :rng and will be
+  passed to [fastmath.random/rng](https://generateme.github.io/fastmath/fastmath.random.html#var-rng).
+
+```clojure
+streams.api> (def s (gaussian-stream nil {:seed 1 :rng :mersenne}))
+#'streams.api/s
+streams.api> (s)
+1.0019203836877835
+streams.api> (def s (gaussian-stream nil {:seed 1 :rng :mersenne}))
+#'streams.api/s
+streams.api> (s)
+1.0019203836877835
+streams.api> fast-r/rngs-list
+(:mersenne
+ :well44497a
+ :jdk
+ :well19937c
+ :well1024a
+ :well19937a
+ :well512a
+ :isaac
+ :well44497b)
+streams.api> (def s (gaussian-stream nil {:seed 1 :rng  :well512a}))
+#'streams.api/s
+streams.api> (s)
+-1.6141338321555592
+```"
   ([n opts]
    (let [sfn (opts->sampler opts :uniform)]
      (stream n (sfn))))
@@ -219,7 +248,34 @@ user> (streams/sample 20 (streams/+ (streams/uniform-stream)
 
 
 (defn gaussian-stream
-  "Create a gaussian stream with mean 0 variance 1"
+  "Create a gaussian stream with mean 0 variance 1. An integer seed may be provided with
+  :seed.  The specific rng you want may be selected with :rng and will be
+  passed to [fastmath.random/rng](https://generateme.github.io/fastmath/fastmath.random.html#var-rng).
+
+```clojure
+streams.api> (def s (gaussian-stream nil {:seed 1 :rng :mersenne}))
+#'streams.api/s
+streams.api> (s)
+1.0019203836877835
+streams.api> (def s (gaussian-stream nil {:seed 1 :rng :mersenne}))
+#'streams.api/s
+streams.api> (s)
+1.0019203836877835
+streams.api> fast-r/rngs-list
+(:mersenne
+ :well44497a
+ :jdk
+ :well19937c
+ :well1024a
+ :well19937a
+ :well512a
+ :isaac
+ :well44497b)
+streams.api> (def s (gaussian-stream nil {:seed 1 :rng  :well512a}))
+#'streams.api/s
+streams.api> (s)
+-1.6141338321555592
+```"
   ([n opts]
    (let [sfn (opts->sampler opts :gaussian)]
      (stream n (sfn))))
@@ -243,7 +299,20 @@ user> (streams/sample 20 (streams/+ (streams/uniform-stream)
 
 (defn fastmath-stream
   "Create a stream based on a
-  [fastmath distribution](https://generateme.github.io/fastmath/fastmath.random.html#var-distribution)."
+  [fastmath distribution](https://generateme.github.io/fastmath/fastmath.random.html#var-distribution).
+
+  You can provide a seed via providing an rng:
+
+```clojure
+streams.api> (def ds (fastmath-stream :exponential {:rng (fast-r/rng :mersenne 1)}))
+#'streams.api/ds
+streams.api> (ds)
+2.0910007182186208
+streams.api> (def ds (fastmath-stream :exponential {:rng (fast-r/rng :mersenne 1)}))
+#'streams.api/ds
+streams.api> (ds)
+2.0910007182186208
+```"
   ([n key opts] (let [dist (distribution-sampler (fast-r/distribution key opts))]
               (stream n (dist))))
   ([key opts] (fastmath-stream nil key opts))
