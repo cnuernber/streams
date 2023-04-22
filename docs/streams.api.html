@@ -34,15 +34,15 @@ if their sub-streams have in fact ended for every item:</p>
 </code></pre>
 </div></div><div class="public anchor" id="var-*"><h3>*</h3><div class="usage"><code>(* a)</code><code>(* a b)</code><code>(* a b c)</code><code>(* a b c &amp; args)</code></div><div class="doc"><div class="markdown"><p>Binary or unary operation *.  Operates in the space of doubles. Arguments
 may be streams or double scalars.</p>
-</div></div><div class="src-link"><a href="https://github.com/cnuernber/streams/blob/master/src/streams/api.clj#L887">view source</a></div></div><div class="public anchor" id="var-.2B"><h3>+</h3><div class="usage"><code>(+ a)</code><code>(+ a b)</code><code>(+ a b c)</code><code>(+ a b c &amp; args)</code></div><div class="doc"><div class="markdown"><p>Binary or unary operation +.  Operates in the space of doubles. Arguments
+</div></div><div class="src-link"><a href="https://github.com/cnuernber/streams/blob/master/src/streams/api.clj#L922">view source</a></div></div><div class="public anchor" id="var-.2B"><h3>+</h3><div class="usage"><code>(+ a)</code><code>(+ a b)</code><code>(+ a b c)</code><code>(+ a b c &amp; args)</code></div><div class="doc"><div class="markdown"><p>Binary or unary operation +.  Operates in the space of doubles. Arguments
 may be streams or double scalars.</p>
-</div></div><div class="src-link"><a href="https://github.com/cnuernber/streams/blob/master/src/streams/api.clj#L886">view source</a></div></div><div class="public anchor" id="var--"><h3>-</h3><div class="usage"><code>(- a)</code><code>(- a b)</code><code>(- a b c)</code><code>(- a b c &amp; args)</code></div><div class="doc"><div class="markdown"><p>Binary or unary operation -.  Operates in the space of doubles. Arguments
+</div></div><div class="src-link"><a href="https://github.com/cnuernber/streams/blob/master/src/streams/api.clj#L921">view source</a></div></div><div class="public anchor" id="var--"><h3>-</h3><div class="usage"><code>(- a)</code><code>(- a b)</code><code>(- a b c)</code><code>(- a b c &amp; args)</code></div><div class="doc"><div class="markdown"><p>Binary or unary operation -.  Operates in the space of doubles. Arguments
 may be streams or double scalars.</p>
-</div></div><div class="src-link"><a href="https://github.com/cnuernber/streams/blob/master/src/streams/api.clj#L889">view source</a></div></div><div class="public anchor" id="var-.2F"><h3>/</h3><div class="usage"><code>(/ a)</code><code>(/ a b)</code><code>(/ a b c)</code><code>(/ a b c &amp; args)</code></div><div class="doc"><div class="markdown"><p>Binary or unary operation /.  Operates in the space of doubles. Arguments
+</div></div><div class="src-link"><a href="https://github.com/cnuernber/streams/blob/master/src/streams/api.clj#L924">view source</a></div></div><div class="public anchor" id="var-.2F"><h3>/</h3><div class="usage"><code>(/ a)</code><code>(/ a b)</code><code>(/ a b c)</code><code>(/ a b c &amp; args)</code></div><div class="doc"><div class="markdown"><p>Binary or unary operation /.  Operates in the space of doubles. Arguments
 may be streams or double scalars.</p>
-</div></div><div class="src-link"><a href="https://github.com/cnuernber/streams/blob/master/src/streams/api.clj#L888">view source</a></div></div><div class="public anchor" id="var-batch-stream"><h3>batch-stream</h3><div class="usage"><code>(batch-stream batch-fn)</code></div><div class="doc"><div class="markdown"><p>Given a function that returns a batch of data - which needs to look like a java.util.List
+</div></div><div class="src-link"><a href="https://github.com/cnuernber/streams/blob/master/src/streams/api.clj#L923">view source</a></div></div><div class="public anchor" id="var-batch-stream"><h3>batch-stream</h3><div class="usage"><code>(batch-stream batch-fn)</code></div><div class="doc"><div class="markdown"><p>Given a function that returns a batch of data - which needs to look like a java.util.List
 make a stream that reads the values of the batches.</p>
-</div></div><div class="src-link"><a href="https://github.com/cnuernber/streams/blob/master/src/streams/api.clj#L192">view source</a></div></div><div class="public anchor" id="var-bin-stream"><h3>bin-stream</h3><div class="usage"><code>(bin-stream s {:keys [n-bins sample-count x-axis-name y-axis-name], :or {sample-count 100000, x-axis-name :value, y-axis-name :sample-count}})</code><code>(bin-stream s)</code></div><div class="doc"><div class="markdown"><p>Bin a stream returning a sorted vector of {x-axis-name bin-left-marker y-axis-name sample-count}.
+</div></div><div class="src-link"><a href="https://github.com/cnuernber/streams/blob/master/src/streams/api.clj#L144">view source</a></div></div><div class="public anchor" id="var-bin-stream"><h3>bin-stream</h3><div class="usage"><code>(bin-stream s {:keys [n-bins sample-count x-axis-name y-axis-name], :or {sample-count 100000, x-axis-name :value, y-axis-name :sample-count}})</code><code>(bin-stream s)</code></div><div class="doc"><div class="markdown"><p>Bin a stream returning a sorted vector of {x-axis-name bin-left-marker y-axis-name sample-count}.
 Returned values are sorted by x-axis-name.</p>
 <p>The bin-size, x-axis-name and y-axis-name are returned as metdata on the return value.</p>
 <p>Example:</p>
@@ -68,23 +68,58 @@ user&gt; (meta binned)
  :min -4.530608699974987,
  :max 4.255453330207979}
 </code></pre>
-</div></div><div class="src-link"><a href="https://github.com/cnuernber/streams/blob/master/src/streams/api.clj#L969">view source</a></div></div><div class="public anchor" id="var-darray-cls"><h3>darray-cls</h3><div class="usage"></div><div class="doc"><div class="markdown"></div></div><div class="src-link"><a href="https://github.com/cnuernber/streams/blob/master/src/streams/api.clj#L339">view source</a></div></div><div class="public anchor" id="var-def-double-binary-op"><h3>def-double-binary-op</h3><h4 class="type">macro</h4><div class="usage"><code>(def-double-binary-op op-sym docstr)</code><code>(def-double-binary-op op-sym)</code></div><div class="doc"><div class="markdown"><p>Define a unary and binary double from clojure.core or another library such as +.
+</div></div><div class="src-link"><a href="https://github.com/cnuernber/streams/blob/master/src/streams/api.clj#L1004">view source</a></div></div><div class="public anchor" id="var-darray-cls"><h3>darray-cls</h3><div class="usage"></div><div class="doc"><div class="markdown"></div></div><div class="src-link"><a href="https://github.com/cnuernber/streams/blob/master/src/streams/api.clj#L360">view source</a></div></div><div class="public anchor" id="var-def-double-binary-op"><h3>def-double-binary-op</h3><h4 class="type">macro</h4><div class="usage"><code>(def-double-binary-op op-sym docstr)</code><code>(def-double-binary-op op-sym)</code></div><div class="doc"><div class="markdown"><p>Define a unary and binary double from clojure.core or another library such as +.
 Operation need only have single arity of 2.</p>
-</div></div><div class="src-link"><a href="https://github.com/cnuernber/streams/blob/master/src/streams/api.clj#L892">view source</a></div></div><div class="public anchor" id="var-def-double-op"><h3>def-double-op</h3><h4 class="type">macro</h4><div class="usage"><code>(def-double-op op-sym)</code></div><div class="doc"><div class="markdown"><p>Define a unary and binary double from clojure.core or another library such as +.
+</div></div><div class="src-link"><a href="https://github.com/cnuernber/streams/blob/master/src/streams/api.clj#L927">view source</a></div></div><div class="public anchor" id="var-def-double-op"><h3>def-double-op</h3><h4 class="type">macro</h4><div class="usage"><code>(def-double-op op-sym)</code></div><div class="doc"><div class="markdown"><p>Define a unary and binary double from clojure.core or another library such as +.
 Operation must have 1,2,+ arities.</p>
-</div></div><div class="src-link"><a href="https://github.com/cnuernber/streams/blob/master/src/streams/api.clj#L854">view source</a></div></div><div class="public anchor" id="var-def-double-unary-op"><h3>def-double-unary-op</h3><h4 class="type">macro</h4><div class="usage"><code>(def-double-unary-op op-sym docstr)</code><code>(def-double-unary-op op-sym)</code></div><div class="doc"><div class="markdown"><p>Define a unary and binary double from clojure.core or another library such as +.
+</div></div><div class="src-link"><a href="https://github.com/cnuernber/streams/blob/master/src/streams/api.clj#L888">view source</a></div></div><div class="public anchor" id="var-def-double-unary-op"><h3>def-double-unary-op</h3><h4 class="type">macro</h4><div class="usage"><code>(def-double-unary-op op-sym docstr)</code><code>(def-double-unary-op op-sym)</code></div><div class="doc"><div class="markdown"><p>Define a unary and binary double from clojure.core or another library such as +.
 Operation need only have single arity of 2.</p>
-</div></div><div class="src-link"><a href="https://github.com/cnuernber/streams/blob/master/src/streams/api.clj#L913">view source</a></div></div><div class="public anchor" id="var-fastmath-stream"><h3>fastmath-stream</h3><div class="usage"><code>(fastmath-stream n key opts)</code><code>(fastmath-stream key opts)</code><code>(fastmath-stream key)</code></div><div class="doc"><div class="markdown"><p>Create a stream based on a
+</div></div><div class="src-link"><a href="https://github.com/cnuernber/streams/blob/master/src/streams/api.clj#L948">view source</a></div></div><div class="public anchor" id="var-fastmath-stream"><h3>fastmath-stream</h3><div class="usage"><code>(fastmath-stream n key opts)</code><code>(fastmath-stream key opts)</code><code>(fastmath-stream key)</code></div><div class="doc"><div class="markdown"><p>Create a stream based on a
 <a href="https://generateme.github.io/fastmath/fastmath.random.html#var-distribution">fastmath distribution</a>.</p>
-</div></div><div class="src-link"><a href="https://github.com/cnuernber/streams/blob/master/src/streams/api.clj#L292">view source</a></div></div><div class="public anchor" id="var-filter"><h3>filter</h3><div class="usage"><code>(filter pred s)</code></div><div class="doc"><div class="markdown"><p>Filter a stream based on a predicate.  Returns a new stream.</p>
-</div></div><div class="src-link"><a href="https://github.com/cnuernber/streams/blob/master/src/streams/api.clj#L410">view source</a></div></div><div class="public anchor" id="var-fpow"><h3>fpow</h3><div class="usage"><code>(fpow a b)</code></div><div class="doc"><div class="markdown"><p>Fast pow where right-hand-side is interpreted as integer values.</p>
-</div></div><div class="src-link"><a href="https://github.com/cnuernber/streams/blob/master/src/streams/api.clj#L910">view source</a></div></div><div class="public anchor" id="var-gaussian-stream"><h3>gaussian-stream</h3><div class="usage"><code>(gaussian-stream n opts)</code><code>(gaussian-stream n)</code><code>(gaussian-stream)</code></div><div class="doc"><div class="markdown"><p>Create a gaussian stream with mean 0 variance 1</p>
-</div></div><div class="src-link"><a href="https://github.com/cnuernber/streams/blob/master/src/streams/api.clj#L269">view source</a></div></div><div class="public anchor" id="var-interleave"><h3>interleave</h3><div class="usage"><code>(interleave)</code><code>(interleave c0)</code><code>(interleave c0 c1)</code><code>(interleave c0 c1 &amp; args)</code></div><div class="doc"><div class="markdown"><p>Fast noncaching form of interleave.</p>
-</div></div><div class="src-link"><a href="https://github.com/cnuernber/streams/blob/master/src/streams/api.clj#L639">view source</a></div></div><div class="public anchor" id="var-limited.3F"><h3>limited?</h3><div class="usage"><code>(limited? s)</code></div><div class="doc"><div class="markdown"><p>Returns true if the stream has a limit</p>
-</div></div><div class="src-link"><a href="https://github.com/cnuernber/streams/blob/master/src/streams/api.clj#L199">view source</a></div></div><div class="public anchor" id="var-log1p"><h3>log1p</h3><div class="usage"><code>(log1p a)</code></div><div class="doc"><div class="markdown"><p>Unary operation log1p.  Operates in the space of doubles. Argument may be a streams or a double.</p>
-</div></div><div class="src-link"><a href="https://github.com/cnuernber/streams/blob/master/src/streams/api.clj#L930">view source</a></div></div><div class="public anchor" id="var-map"><h3>map</h3><div class="usage"><code>(map mapfn s)</code><code>(map mapfn a b)</code><code>(map mapfn a b c)</code><code>(map mapfn a b c &amp; args)</code></div><div class="doc"><div class="markdown"><p>Map a function onto one or more streams.  Returns a new stream whose limit is the least
+<p>You can provide a seed via providing an rng:</p>
+<pre><code class="language-clojure">streams.api&gt; (def ds (fastmath-stream :exponential {:rng (fast-r/rng :mersenne 1)}))
+#'streams.api/ds
+streams.api&gt; (ds)
+2.0910007182186208
+streams.api&gt; (def ds (fastmath-stream :exponential {:rng (fast-r/rng :mersenne 1)}))
+#'streams.api/ds
+streams.api&gt; (ds)
+2.0910007182186208
+</code></pre>
+</div></div><div class="src-link"><a href="https://github.com/cnuernber/streams/blob/master/src/streams/api.clj#L300">view source</a></div></div><div class="public anchor" id="var-filter"><h3>filter</h3><div class="usage"><code>(filter pred s)</code></div><div class="doc"><div class="markdown"><p>Filter a stream based on a predicate.  Returns a new stream.</p>
+</div></div><div class="src-link"><a href="https://github.com/cnuernber/streams/blob/master/src/streams/api.clj#L426">view source</a></div></div><div class="public anchor" id="var-fpow"><h3>fpow</h3><div class="usage"><code>(fpow a b)</code></div><div class="doc"><div class="markdown"><p>Fast pow where right-hand-side is interpreted as integer values.</p>
+</div></div><div class="src-link"><a href="https://github.com/cnuernber/streams/blob/master/src/streams/api.clj#L945">view source</a></div></div><div class="public anchor" id="var-gaussian-stream"><h3>gaussian-stream</h3><div class="usage"><code>(gaussian-stream n opts)</code><code>(gaussian-stream n)</code><code>(gaussian-stream)</code></div><div class="doc"><div class="markdown"><p>Create a gaussian stream with mean 0 variance 1. An integer seed may be provided with
+:seed.  The specific rng you want may be selected with :rng and will be
+passed to <a href="https://generateme.github.io/fastmath/fastmath.random.html#var-rng">fastmath.random/rng</a>.</p>
+<pre><code class="language-clojure">streams.api&gt; (def s (gaussian-stream nil {:seed 1 :rng :mersenne}))
+#'streams.api/s
+streams.api&gt; (s)
+1.0019203836877835
+streams.api&gt; (def s (gaussian-stream nil {:seed 1 :rng :mersenne}))
+#'streams.api/s
+streams.api&gt; (s)
+1.0019203836877835
+streams.api&gt; fast-r/rngs-list
+(:mersenne
+ :well44497a
+ :jdk
+ :well19937c
+ :well1024a
+ :well19937a
+ :well512a
+ :isaac
+ :well44497b)
+streams.api&gt; (def s (gaussian-stream nil {:seed 1 :rng  :well512a}))
+#'streams.api/s
+streams.api&gt; (s)
+-1.6141338321555592
+</code></pre>
+</div></div><div class="src-link"><a href="https://github.com/cnuernber/streams/blob/master/src/streams/api.clj#L250">view source</a></div></div><div class="public anchor" id="var-interleave"><h3>interleave</h3><div class="usage"><code>(interleave)</code><code>(interleave c0)</code><code>(interleave c0 c1)</code><code>(interleave c0 c1 &amp; args)</code></div><div class="doc"><div class="markdown"><p>Fast noncaching form of interleave.</p>
+</div></div><div class="src-link"><a href="https://github.com/cnuernber/streams/blob/master/src/streams/api.clj#L677">view source</a></div></div><div class="public anchor" id="var-limited.3F"><h3>limited?</h3><div class="usage"><code>(limited? s)</code></div><div class="doc"><div class="markdown"><p>Returns true if the stream has a limit</p>
+</div></div><div class="src-link"><a href="https://github.com/cnuernber/streams/blob/master/src/streams/api.clj#L151">view source</a></div></div><div class="public anchor" id="var-log1p"><h3>log1p</h3><div class="usage"><code>(log1p a)</code></div><div class="doc"><div class="markdown"><p>Unary operation log1p.  Operates in the space of doubles. Argument may be a streams or a double.</p>
+</div></div><div class="src-link"><a href="https://github.com/cnuernber/streams/blob/master/src/streams/api.clj#L965">view source</a></div></div><div class="public anchor" id="var-map"><h3>map</h3><div class="usage"><code>(map mapfn s)</code><code>(map mapfn a b)</code><code>(map mapfn a b c)</code><code>(map mapfn a b c &amp; args)</code></div><div class="doc"><div class="markdown"><p>Map a function onto one or more streams.  Returns a new stream whose limit is the least
 of any of the streams.</p>
-</div></div><div class="src-link"><a href="https://github.com/cnuernber/streams/blob/master/src/streams/api.clj#L536">view source</a></div></div><div class="public anchor" id="var-prob-interleave"><h3>prob-interleave</h3><div class="usage"><code>(prob-interleave args opts)</code><code>(prob-interleave args)</code></div><div class="doc"><div class="markdown"><p>Probabilistically interleave multiple streams.  Each argument must be a tuple
+</div></div><div class="src-link"><a href="https://github.com/cnuernber/streams/blob/master/src/streams/api.clj#L560">view source</a></div></div><div class="public anchor" id="var-prob-interleave"><h3>prob-interleave</h3><div class="usage"><code>(prob-interleave args opts)</code><code>(prob-interleave args)</code></div><div class="doc"><div class="markdown"><p>Probabilistically interleave multiple streams.  Each argument must be a tuple
 of <a href="stream prob">stream prob</a> and probabilities will be used with a flat distribution to decide
 which stream to sample from.  Iteration stops when any of the component streams
 is empty.</p>
@@ -101,9 +136,34 @@ is empty.</p>
 [0.3261978516358189, 0.23722603841776788, 1.0, -0.16219928642385675, 1.0,
  0.43443517752548294, -1.93659876689825]
 </code></pre>
-</div></div><div class="src-link"><a href="https://github.com/cnuernber/streams/blob/master/src/streams/api.clj#L783">view source</a></div></div><div class="public anchor" id="var-sample"><h3>sample</h3><div class="usage"><code>(sample s)</code><code>(sample n s)</code></div><div class="doc"><div class="markdown"><p>Sample stream into a double array.  If n is not provided, stream must either
+</div></div><div class="src-link"><a href="https://github.com/cnuernber/streams/blob/master/src/streams/api.clj#L815">view source</a></div></div><div class="public anchor" id="var-sample"><h3>sample</h3><div class="usage"><code>(sample s)</code><code>(sample n s)</code></div><div class="doc"><div class="markdown"><p>Sample stream into a double array.  If n is not provided, stream must either
 already have a limit or an oom is imminent.</p>
-</div></div><div class="src-link"><a href="https://github.com/cnuernber/streams/blob/master/src/streams/api.clj#L375">view source</a></div></div><div class="public anchor" id="var-stream"><h3>stream</h3><h4 class="type">macro</h4><div class="usage"><code>(stream code)</code><code>(stream l code)</code></div><div class="doc"><div class="markdown"><p>Create a 'stream' - the lazy noncaching form of repeatedly.</p>
-</div></div><div class="src-link"><a href="https://github.com/cnuernber/streams/blob/master/src/streams/api.clj#L90">view source</a></div></div><div class="public anchor" id="var-take"><h3>take</h3><div class="usage"><code>(take n s)</code></div><div class="doc"><div class="markdown"><p>Take at most N elements from this stream.  Returns a new stream.</p>
-</div></div><div class="src-link"><a href="https://github.com/cnuernber/streams/blob/master/src/streams/api.clj#L342">view source</a></div></div><div class="public anchor" id="var-uniform-stream"><h3>uniform-stream</h3><div class="usage"><code>(uniform-stream n opts)</code><code>(uniform-stream n)</code><code>(uniform-stream)</code></div><div class="doc"><div class="markdown"><p>Create a uniform stream with values <a href="0-1">0-1</a></p>
-</div></div><div class="src-link"><a href="https://github.com/cnuernber/streams/blob/master/src/streams/api.clj#L258">view source</a></div></div></div></body></html>
+</div></div><div class="src-link"><a href="https://github.com/cnuernber/streams/blob/master/src/streams/api.clj#L391">view source</a></div></div><div class="public anchor" id="var-stream"><h3>stream</h3><h4 class="type">macro</h4><div class="usage"><code>(stream code)</code><code>(stream l code)</code></div><div class="doc"><div class="markdown"><p>Create a 'stream' - the lazy noncaching form of repeatedly.</p>
+</div></div><div class="src-link"><a href="https://github.com/cnuernber/streams/blob/master/src/streams/api.clj#L92">view source</a></div></div><div class="public anchor" id="var-take"><h3>take</h3><div class="usage"><code>(take n s)</code></div><div class="doc"><div class="markdown"><p>Take at most N elements from this stream.  Returns a new stream.</p>
+</div></div><div class="src-link"><a href="https://github.com/cnuernber/streams/blob/master/src/streams/api.clj#L363">view source</a></div></div><div class="public anchor" id="var-uniform-stream"><h3>uniform-stream</h3><div class="usage"><code>(uniform-stream n opts)</code><code>(uniform-stream n)</code><code>(uniform-stream)</code></div><div class="doc"><div class="markdown"><p>Create a uniform stream with values <a href="0-1">0-1</a>.  An integer seed may be provided with
+:seed.  The specific rng you want may be selected with :rng and will be
+passed to <a href="https://generateme.github.io/fastmath/fastmath.random.html#var-rng">fastmath.random/rng</a>.</p>
+<pre><code class="language-clojure">streams.api&gt; (def s (gaussian-stream nil {:seed 1 :rng :mersenne}))
+#'streams.api/s
+streams.api&gt; (s)
+1.0019203836877835
+streams.api&gt; (def s (gaussian-stream nil {:seed 1 :rng :mersenne}))
+#'streams.api/s
+streams.api&gt; (s)
+1.0019203836877835
+streams.api&gt; fast-r/rngs-list
+(:mersenne
+ :well44497a
+ :jdk
+ :well19937c
+ :well1024a
+ :well19937a
+ :well512a
+ :isaac
+ :well44497b)
+streams.api&gt; (def s (gaussian-stream nil {:seed 1 :rng  :well512a}))
+#'streams.api/s
+streams.api&gt; (s)
+-1.6141338321555592
+</code></pre>
+</div></div><div class="src-link"><a href="https://github.com/cnuernber/streams/blob/master/src/streams/api.clj#L212">view source</a></div></div></div></body></html>
